@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Peer, ChatMessage, FileOffer, FileProgress, InitialState } from './types';
+import { Peer, ChatMessage, FileOffer, FileProgress, InitialState, LastMessageInfo } from './types';
 import { Sidebar } from './components/Sidebar';
 import { ChatArea } from './components/ChatArea';
 import { NicknameModal } from './components/NicknameModal';
@@ -41,6 +41,9 @@ export function App() {
   const [fileProgresses, setFileProgresses] = useState<Record<string, FileProgress>>({});
   const [pings, setPings] = useState<Array<{ id: string; senderNick: string; senderIp: string; timestamp: number; targetId: string }>>([]);
 
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [lastMessages, setLastMessages] = useState<Record<string, LastMessageInfo>>({});
+
   const [activePingToast, setActivePingToast] = useState<{ senderNick: string; senderIp: string } | null>(null);
   const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
 
@@ -48,6 +51,18 @@ export function App() {
   useEffect(() => {
     myPeerRef.current = myPeer;
   }, [myPeer]);
+
+  const selectedTargetIdRef = useRef(selectedTargetId);
+  useEffect(() => {
+    selectedTargetIdRef.current = selectedTargetId;
+    // Clear unread count for active conversation when selectedTargetId changes
+    setUnreadCounts(prev => {
+      if (!prev[selectedTargetId]) return prev;
+      const next = { ...prev };
+      delete next[selectedTargetId];
+      return next;
+    });
+  }, [selectedTargetId]);
 
   // Reset title on window focus
   useEffect(() => {
@@ -84,12 +99,31 @@ export function App() {
     EventsOn('new-message', async (chatMsg: ChatMessage) => {
       setMessages(prev => [...prev, chatMsg]);
 
-      // Check if message is a 1-1 private message from another user
       const currentMyPeer = myPeerRef.current;
       const isFromOtherUser = Boolean(chatMsg.senderId && chatMsg.senderId !== currentMyPeer.id);
-      const isPrivateMessage = Boolean(chatMsg.targetId && chatMsg.targetId !== '');
+      const chatKey = chatMsg.targetId === '' ? '' : chatMsg.senderId;
 
-      if (isFromOtherUser && isPrivateMessage) {
+      // Track last message per target conversation
+      setLastMessages(prev => ({
+        ...prev,
+        [chatKey]: {
+          content: chatMsg.content,
+          timestamp: chatMsg.timestamp,
+          senderNick: chatMsg.senderNick,
+        },
+      }));
+
+      if (isFromOtherUser) {
+        const isCurrentChat = selectedTargetIdRef.current === chatKey;
+
+        if (!isCurrentChat) {
+          setUnreadCounts(prev => ({
+            ...prev,
+            [chatKey]: (prev[chatKey] || 0) + 1,
+          }));
+          playPrivateMessageAlert();
+        }
+
         let isMinimised = false;
         try {
           if ((window as any).runtime && (window as any).runtime.WindowIsMinimised) {
@@ -103,12 +137,9 @@ export function App() {
 
         if (isBackgrounded) {
           document.title = `💬 (${chatMsg.senderNick}) LAN Messenger v1.0.0`;
-          playPrivateMessageAlert();
         }
       }
     });
-
-
 
     EventsOn('ping-received', (pingData: any) => {
       const newPing = {
@@ -124,6 +155,30 @@ export function App() {
 
     EventsOn('file-offer', (offer: FileOffer) => {
       setFileOffers(prev => [...prev, offer]);
+
+      const currentMyPeer = myPeerRef.current;
+      const isFromOtherUser = Boolean(offer.senderId && offer.senderId !== currentMyPeer.id);
+      const chatKey = offer.targetId === '' ? '' : offer.senderId;
+
+      setLastMessages(prev => ({
+        ...prev,
+        [chatKey]: {
+          content: `📁 Offered file: ${offer.fileName}`,
+          timestamp: offer.timestamp,
+          senderNick: offer.senderNick,
+        },
+      }));
+
+      if (isFromOtherUser) {
+        const isCurrentChat = selectedTargetIdRef.current === chatKey;
+        if (!isCurrentChat) {
+          setUnreadCounts(prev => ({
+            ...prev,
+            [chatKey]: (prev[chatKey] || 0) + 1,
+          }));
+          playPrivateMessageAlert();
+        }
+      }
     });
 
     EventsOn('file-progress', (progress: FileProgress) => {
@@ -147,6 +202,16 @@ export function App() {
   }, []);
 
   // Handlers
+  const handleSelectTarget = (targetId: string) => {
+    setSelectedTargetId(targetId);
+    setUnreadCounts(prev => {
+      if (!prev[targetId]) return prev;
+      const next = { ...prev };
+      delete next[targetId];
+      return next;
+    });
+  };
+
   const handleSendMessage = (content: string) => {
     SendChatMessage(selectedTargetId, content).catch(err => {
       console.error("Failed to send message:", err);
@@ -199,7 +264,9 @@ export function App() {
         serverAddr={serverAddr}
         peers={peers}
         selectedTargetId={selectedTargetId}
-        onSelectTarget={setSelectedTargetId}
+        unreadCounts={unreadCounts}
+        lastMessages={lastMessages}
+        onSelectTarget={handleSelectTarget}
         onOpenNicknameModal={() => setIsNicknameModalOpen(true)}
         onSendPing={handleSendPing}
       />

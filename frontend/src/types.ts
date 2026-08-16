@@ -50,3 +50,10 @@ export interface InitialState {
   serverAddr: string;
   peers: Peer[];
 }
+
+export interface LastMessageInfo {
+  content: string;
+  timestamp: number;
+  senderNick: string;
+}
+
