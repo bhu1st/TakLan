@@ -29,7 +29,3 @@ export function SendPing(arg1) {
 export function SetNickname(arg1) {
   return window['go']['main']['App']['SetNickname'](arg1);
 }
-
-export function ShowNativeNotification(arg1, arg2) {
-  return window['go']['main']['App']['ShowNativeNotification'](arg1, arg2);
-}

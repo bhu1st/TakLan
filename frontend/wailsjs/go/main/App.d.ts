@@ -15,5 +15,3 @@ export function SendChatMessage(arg1:string,arg2:string):Promise<void>;
 export function SendPing(arg1:string):Promise<void>;
 
 export function SetNickname(arg1:string):Promise<boolean>;
-
-export function ShowNativeNotification(arg1:string,arg2:string):Promise<void>;

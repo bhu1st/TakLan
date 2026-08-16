@@ -17,7 +17,7 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:     "LAN Messenger",
+		Title:     "LAN Messenger v1.0.0",
 		Width:     1120,
 		Height:    760,
 		MinWidth:  900,
@@ -32,7 +32,6 @@ func main() {
 			app,
 		},
 	})
-
 
 	if err != nil {
 		println("Error:", err.Error())

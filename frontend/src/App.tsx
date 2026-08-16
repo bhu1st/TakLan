@@ -51,8 +51,9 @@ export function App() {
 
   // Reset title on window focus
   useEffect(() => {
+    document.title = 'LAN Messenger v1.0.0';
     const handleFocus = () => {
-      document.title = 'LAN Messenger';
+      document.title = 'LAN Messenger v1.0.0';
     };
     window.addEventListener('focus', handleFocus);
     return () => {
@@ -101,7 +102,7 @@ export function App() {
         const isBackgrounded = isMinimised || document.hidden || !document.hasFocus();
 
         if (isBackgrounded) {
-          document.title = `💬 (${chatMsg.senderNick}) LAN Messenger`;
+          document.title = `💬 (${chatMsg.senderNick}) LAN Messenger v1.0.0`;
           playPrivateMessageAlert();
         }
       }

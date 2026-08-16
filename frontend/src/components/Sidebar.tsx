@@ -45,7 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div>
 
               <h1 className="font-bold text-slate-100 text-base tracking-wide flex items-center gap-1.5">
-                LAN Messenger
+                LAN Messenger <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-normal border border-indigo-500/30">v1.0.0</span>
               </h1>
               <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1">
                 <Wifi className="w-3 h-3 text-cyan-400" />
@@ -57,8 +57,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex flex-col items-end">
             <span
               className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${isHost
-                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
-                  : 'bg-slate-800 text-slate-400 border-slate-700'
+                ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                : 'bg-slate-800 text-slate-400 border-slate-700'
                 }`}
             >
               {isHost ? 'Host Server' : 'Peer Client'}
@@ -114,8 +114,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button
           onClick={() => onSelectTarget('')}
           className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${selectedTargetId === ''
-              ? 'bg-indigo-600/90 text-white shadow-md shadow-indigo-600/20'
-              : 'text-slate-300 hover:bg-slate-800/60'
+            ? 'bg-indigo-600/90 text-white shadow-md shadow-indigo-600/20'
+            : 'text-slate-300 hover:bg-slate-800/60'
             }`}
         >
           <div className="flex items-center gap-2">
@@ -163,8 +163,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   key={peer.id}
                   onClick={() => onSelectTarget(peer.id)}
                   className={`group flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${isSelected
-                      ? 'bg-slate-800/90 text-white border border-indigo-500/30'
-                      : 'hover:bg-slate-800/40 text-slate-300'
+                    ? 'bg-slate-800/90 text-white border border-indigo-500/30'
+                    : 'hover:bg-slate-800/40 text-slate-300'
                     }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
