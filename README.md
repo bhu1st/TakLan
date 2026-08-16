@@ -68,31 +68,49 @@ The compiled executable will be placed in `desktop/build/bin/lanmsngr.exe`.
 
 ---
 
-### 2. Build React Native Android App (`.apk`)
+### 📱 Mobile App (React Native / Expo)
 
-#### Option A: Expo Go Mobile Testing (Development Build)
+1. Navigate to the mobile directory:
+   ```bash
+   cd mobile
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Build & Run:
+
+#### Option A: Expo Go (Development)
 ```bash
-cd android
+cd mobile
 npm run start
 ```
 
 #### Option B: Standalone Android APK Build (via EAS Cloud)
 ```bash
-cd android
+cd mobile
 npx eas build -p android --profile preview
 ```
 
 #### Option C: Native Offline APK Build (via Gradle)
-Build a release/debug `.apk` locally without Expo cloud dependency:
-```bash
-cd android
-npx expo prebuild
-cd android
-./gradlew assembleDebug
-```
-*Note: If Gradle asks for Android SDK location, ensure `android/android/local.properties` exists with `sdk.dir=C:/Users/YOUR_USER/AppData/Local/Android/Sdk`.*
 
-The compiled APK will be created at: `android/android/app/build/outputs/apk/debug/app-debug.apk`
+- **For Standalone Offline Testing (No Metro server needed on PC)**:
+  ```bash
+  cd mobile/android
+  ./gradlew assembleRelease --no-daemon
+  ```
+  *Output*: `mobile/android/app/build/outputs/apk/release/app-release.apk`
+
+- **For Active Live Development (With Metro running on PC)**:
+  ```bash
+  # 1. Start Metro server in terminal 1:
+  cd mobile && npm run start
+
+  # 2. Build & install Debug APK:
+  cd mobile/android && ./gradlew assembleDebug --no-daemon
+  ```
 
 ---
 

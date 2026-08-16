@@ -2,6 +2,7 @@
 .DS_Store
 Thumbs.db
 desktop.ini
+*.log
 
 # Node modules & dependencies
 **/node_modules/
@@ -10,6 +11,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Build outputs & binaries
+desktop/build/*
 desktop/build/bin/
 desktop/bin/
 desktop/release/
@@ -24,11 +26,13 @@ release
 *.swp
 *.swo
 
-# Android build outputs & local properties
+# Mobile & Android build outputs, caches & local properties
 .gradle/
 **/build/
-android/.gradle/
-android/captures/
-android/local.properties
-android/.idea/
-android/app/build/
+mobile/android/.gradle/
+mobile/android/captures/
+mobile/android/local.properties
+mobile/android/.idea/
+mobile/android/app/build/
+mobile/.expo/
+mobile/dist/
