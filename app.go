@@ -61,7 +61,7 @@ func (a *App) startup(ctx context.Context) {
 
 	// Server Auto-Discovery & Election
 	log.Printf("[App] Discovering active server on LAN...")
-	discoveredAddr, err := network.DiscoverServer(1200 * time.Millisecond)
+	discoveredAddr, err := network.DiscoverServer(3000 * time.Millisecond)
 
 	if err == nil && discoveredAddr != "" {
 		// Server found on network! Join as Client
@@ -111,16 +111,15 @@ func (a *App) shutdown(ctx context.Context) {
 // onPacketReceived handles network packets on client node
 func (a *App) onPacketReceived(packet network.Packet) {
 	switch packet.Type {
-	case network.TypeJoinAck, network.TypePeerList:
-		if packet.Type == network.TypeJoinAck {
-			var ack network.JoinAckPayload
-			if err := network.UnmarshalPayload(packet.Payload, &ack); err == nil {
-				a.peers = ack.Peers
-				wailsRuntime.EventsEmit(a.ctx, "joined-ack", ack)
-				wailsRuntime.EventsEmit(a.ctx, "peers-updated", a.peers)
-			}
+	case network.TypeJoinAck:
+		var ack network.JoinAckPayload
+		if err := network.UnmarshalPayload(packet.Payload, &ack); err == nil {
+			a.peers = ack.Peers
+			wailsRuntime.EventsEmit(a.ctx, "joined-ack", ack)
+			wailsRuntime.EventsEmit(a.ctx, "peers-updated", a.peers)
 		}
 
+	case network.TypePeerList:
 		var payload network.PeerListPayload
 		if err := network.UnmarshalPayload(packet.Payload, &payload); err == nil {
 			a.peers = payload.Peers

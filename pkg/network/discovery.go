@@ -31,35 +31,78 @@ func NewDiscoveryBeacon(serverIP string, serverPort int) *DiscoveryBeacon {
 	}
 }
 
-// Start begins broadcasting UDP packets every 1.5 seconds
+// getBroadcastAddrs returns 255.255.255.255 and subnet broadcast addresses for active IPv4 interfaces
+func getBroadcastAddrs() []string {
+	addrs := []string{fmt.Sprintf("255.255.255.255:%d", UDPDiscoveryPort)}
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return addrs
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrsList, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrsList {
+			ipNet, ok := a.(*net.IPNet)
+			if !ok || ipNet.IP.IsLoopback() {
+				continue
+			}
+			ip4 := ipNet.IP.To4()
+			if ip4 == nil {
+				continue
+			}
+			mask := ipNet.Mask
+			if len(mask) == 4 {
+				bcast := make(net.IP, 4)
+				for i := 0; i < 4; i++ {
+					bcast[i] = ip4[i] | ^mask[i]
+				}
+				addrs = append(addrs, fmt.Sprintf("%s:%d", bcast.String(), UDPDiscoveryPort))
+			}
+		}
+	}
+	return addrs
+}
+
+// Start begins broadcasting UDP packets every 500ms
 func (b *DiscoveryBeacon) Start() {
 	b.wg.Add(1)
 	go func() {
 		defer b.wg.Done()
-		addr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("255.255.255.255:%d", UDPDiscoveryPort))
-		if err != nil {
-			return
-		}
-
-		conn, err := net.DialUDP("udp4", nil, addr)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
 
 		message := []byte(fmt.Sprintf("%s:%s:%d", BeaconMagic, b.serverIP, b.serverPort))
-		ticker := time.NewTicker(1500 * time.Millisecond)
-		defer ticker.Stop()
+
+		sendBroadcast := func() {
+			for _, targetAddr := range getBroadcastAddrs() {
+				raddr, err := net.ResolveUDPAddr("udp4", targetAddr)
+				if err != nil {
+					continue
+				}
+				conn, err := net.DialUDP("udp4", nil, raddr)
+				if err != nil {
+					continue
+				}
+				conn.Write(message)
+				conn.Close()
+			}
+		}
 
 		// Send initial broadcast immediately
-		conn.Write(message)
+		sendBroadcast()
+
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
 
 		for {
 			select {
 			case <-b.stopChan:
 				return
 			case <-ticker.C:
-				conn.Write(message)
+				sendBroadcast()
 			}
 		}
 	}()
