@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, X, Check, Wifi, Laptop } from 'lucide-react';
 import { Peer } from '../types';
 
@@ -17,6 +17,13 @@ export const NicknameModal: React.FC<NicknameModalProps> = ({
 }) => {
   const [nickname, setNickname] = useState(myPeer.nickname);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setNickname(myPeer.nickname);
+      setError('');
+    }
+  }, [isOpen, myPeer.nickname]);
 
   if (!isOpen) return null;
 

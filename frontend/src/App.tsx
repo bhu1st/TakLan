@@ -82,7 +82,18 @@ export function App() {
     GetInitialState()
       .then((state: InitialState) => {
         if (state) {
-          if (state.myPeer) setMyPeer(state.myPeer);
+          const savedNick = localStorage.getItem('lanmsngr_user_nickname');
+          if (savedNick && savedNick.trim()) {
+            const customNick = savedNick.trim();
+            if (state.myPeer) {
+              setMyPeer({ ...state.myPeer, nickname: customNick });
+            }
+            SetNickname(customNick).catch(err => {
+              console.warn("Failed to apply saved nickname to network node:", err);
+            });
+          } else if (state.myPeer) {
+            setMyPeer(state.myPeer);
+          }
           setIsHost(state.isHost);
           if (state.serverAddr) setServerAddr(state.serverAddr);
           if (state.peers) setPeers(state.peers);
@@ -245,9 +256,16 @@ export function App() {
   };
 
   const handleSaveNickname = (newNick: string) => {
-    SetNickname(newNick)
+    const trimmedNick = newNick.trim();
+    if (!trimmedNick) return;
+    SetNickname(trimmedNick)
       .then(() => {
-        setMyPeer(prev => ({ ...prev, nickname: newNick }));
+        try {
+          localStorage.setItem('lanmsngr_user_nickname', trimmedNick);
+        } catch (e) {
+          console.warn("Failed to persist nickname to localStorage:", e);
+        }
+        setMyPeer(prev => ({ ...prev, nickname: trimmedNick }));
       })
       .catch(err => {
         console.error("Failed to update nickname:", err);
