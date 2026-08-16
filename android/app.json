@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "LAN Msngr",
+    "slug": "lanmsngr",
+    "version": "1.0.9",
+    "orientation": "portrait",
+    "scheme": "lanmsngr",
+    "userInterfaceStyle": "dark",
+    "sdkVersion": "54.0.0",
+    "android": {
+      "package": "net.bhupal.lanmsngr",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A"
+      },
+      "navBarColor": "#00000000",
+      "statusBar": {
+        "barStyle": "light-content",
+        "backgroundColor": "#00000000",
+        "translucent": true
+      }
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-system-ui"
+    ]
+  }
+}
