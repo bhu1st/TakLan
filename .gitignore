@@ -1,6 +1,7 @@
 # Wails & Go Binaries
 build/bin/
 bin/
+release/
 lanmsngr
 lanmsngr.exe
 *.exe
