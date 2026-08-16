@@ -168,7 +168,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               {generalLastMsg && (
                 <p className={`text-[10px] truncate max-w-[140px] ${generalUnread > 0 && selectedTargetId !== '' ? 'text-indigo-200 font-medium' : 'text-slate-400'}`}>
-                  {generalLastMsg.senderNick}: {generalLastMsg.content}
+                  {generalLastMsg.senderNick}: {generalLastMsg.content.replace(/\s+/g, ' ')}
                 </p>
               )}
             </div>
@@ -277,7 +277,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {lastMsg ? (
                           <p className={`text-[10px] truncate max-w-[130px] ${unreadCount > 0 ? 'text-indigo-200 font-semibold' : 'text-slate-400'
                             }`}>
-                            {lastMsg.content}
+                            {lastMsg.content.replace(/\s+/g, ' ')}
                           </p>
                         ) : (
                           <div className="text-[10px] font-mono text-cyan-400/90 flex items-center gap-1">

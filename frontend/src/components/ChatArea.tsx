@@ -44,6 +44,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 }) => {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Filter items for currently selected channel/DM
   const isPublic = selectedTargetId === '';
@@ -92,6 +93,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [timelineItems.length]);
 
+  // Auto-expand textarea height
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`;
+    }
+  }, [inputText]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
@@ -99,8 +108,37 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     setInputText('');
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (inputText.trim()) {
+        onSendMessage(inputText);
+        setInputText('');
+      }
+    }
+  };
+
   const formatTime = (ts: number) => {
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const renderMessageContent = (content: string) => {
+    const isMultiLine = content.includes('\n');
+    const isAsciiArt = isMultiLine || /[\/\\|_\-+=#@*~^`]{3,}/.test(content);
+
+    if (isAsciiArt) {
+      return (
+        <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-tight font-normal select-text overflow-x-auto m-0">
+          {content}
+        </pre>
+      );
+    }
+
+    return (
+      <div className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">
+        {content}
+      </div>
+    );
   };
 
   return (
@@ -166,13 +204,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   </div>
 
                   <div
-                    className={`max-w-xl px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                      isMe
+                    className={`max-w-2xl px-4 py-2.5 rounded-2xl ${isMe
                         ? 'bg-indigo-600 text-white rounded-br-none shadow-md shadow-indigo-600/20'
                         : 'glass-card text-slate-100 rounded-bl-none border border-slate-700/60'
-                    }`}
+                      }`}
                   >
-                    {item.chat.content}
+                    {renderMessageContent(item.chat.content)}
                   </div>
                 </div>
               );
@@ -212,32 +249,34 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
       {/* Message Input Footer */}
       <div className="p-4 border-t border-slate-800/80 bg-slate-900/40">
-        <form onSubmit={handleSubmit} className="flex items-center gap-2">
+        <form onSubmit={handleSubmit} className="flex items-end gap-2">
           <button
             type="button"
             onClick={onSendFile}
-            className="p-2.5 rounded-xl glass-input text-slate-400 hover:text-indigo-400 hover:border-indigo-500/40 transition-colors"
+            className="p-2.5 rounded-xl glass-input text-slate-400 hover:text-indigo-400 hover:border-indigo-500/40 transition-colors mb-0.5"
             title="Attach & Send File"
           >
             <Paperclip className="w-5 h-5" />
           </button>
 
-          <input
-            type="text"
+          <textarea
+            ref={textareaRef}
+            rows={1}
             placeholder={
               isPublic
-                ? "Broadcast message to all LAN peers..."
-                : `Direct message to ${targetPeer?.nickname || 'Peer'}...`
+                ? "Broadcast message... (Enter to send, Shift+Enter for new line)"
+                : `Direct message to ${targetPeer?.nickname || 'Peer'}... (Enter to send, Shift+Enter for new line)`
             }
             value={inputText}
             onChange={e => setInputText(e.target.value)}
-            className="flex-1 px-4 py-2.5 text-sm rounded-xl glass-input text-slate-100 placeholder-slate-500 focus:outline-none"
+            onKeyDown={handleKeyDown}
+            className="flex-1 px-4 py-2.5 text-xs font-mono rounded-xl glass-input text-slate-100 placeholder-slate-500 focus:outline-none resize-none max-h-40 overflow-y-auto leading-relaxed"
           />
 
           <button
             type="submit"
             disabled={!inputText.trim()}
-            className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-medium transition-all shadow-md shadow-indigo-600/20"
+            className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-medium transition-all shadow-md shadow-indigo-600/20 mb-0.5"
           >
             <Send className="w-5 h-5" />
           </button>
