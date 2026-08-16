@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import packageJson from '../../package.json';
 import { Peer, LastMessageInfo } from '../types';
 import { Users, Bell, Edit3, Server, Search, Hash, Wifi } from 'lucide-react';
 
@@ -74,11 +75,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl overflow-hidden border border-indigo-500/30 shadow-md shadow-indigo-500/20 shrink-0 bg-slate-900 flex items-center justify-center">
-              <img src="/icon.png" alt="LAN Messenger Logo" className="w-full h-full object-cover" />
+              <img src="/icon.png" alt="LAN Msngr Logo" className="w-full h-full object-cover" />
             </div>
             <div>
               <h1 className="font-bold text-slate-100 text-base tracking-wide flex items-center gap-1.5">
-                LAN Messenger <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-normal border border-indigo-500/30">v1.0.0</span>
+                LAN Msngr <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-normal border border-indigo-500/30">v{packageJson.version}</span>
               </h1>
               <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1">
                 <Wifi className="w-3 h-3 text-cyan-400" />
