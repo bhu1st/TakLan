@@ -1,6 +1,9 @@
-# LAN Msngr v1.0.4
+# LAN Msngr
+
+![LAN Msngr Banner](lanmsngr.png)
 
 A modern, cross-platform desktop application built with **Go**, **Wails v2**, **React**, and **Tailwind CSS** for real-time messaging and high-speed file transfer across Local Area Networks (LAN).
+
 
 ---
 
