@@ -8,8 +8,22 @@
     "scheme": "lanmsngr",
     "userInterfaceStyle": "dark",
     "sdkVersion": "54.0.0",
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#090D16"
+    },
     "android": {
       "package": "net.bhupal.lanmsngr",
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE",
+        "CHANGE_WIFI_MULTICAST_STATE",
+        "VIBRATE",
+        "MODIFY_AUDIO_SETTINGS"
+      ],
       "icon": "./assets/images/icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",

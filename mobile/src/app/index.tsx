@@ -6,12 +6,12 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
+  Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FileCard } from '@/components/FileCard';
 import { FileOffer, FileProgress, Peer, ChatMessage, LastMessageInfo, PingAlert } from '@/types/network';
 import { networkService } from '@/services/network';
@@ -20,6 +20,21 @@ import { MessageBubble } from '@/components/MessageBubble';
 import { ConnectModal } from '@/components/ConnectModal';
 
 export default function AppScreen() {
+  const insets = useSafeAreaInsets();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
   const [myPeer, setMyPeer] = useState<Peer>(networkService.getMyPeer());
   const [peers, setPeers] = useState<Peer[]>(networkService.getPeers());
   const [selectedTargetId, setSelectedTargetId] = useState<string>(''); // "" = General channel
@@ -189,7 +204,7 @@ export default function AppScreen() {
   const generalUnread = unreadCounts[''] || 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* App Header */}
@@ -218,9 +233,18 @@ export default function AppScreen() {
             ]}
             onPress={() => setSelectedTargetId('')}
           >
-            <Text style={[styles.channelChipText, isPublic && styles.activeChannelText]}>
-              # General Channel {generalUnread > 0 ? `(${generalUnread})` : ''}
+            <Text style={[
+              styles.channelChipText,
+              isPublic && styles.activeChannelText,
+              generalUnread > 0 && !isPublic && styles.unreadChannelText
+            ]}>
+              # General Channel
             </Text>
+            {generalUnread > 0 && !isPublic && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>{generalUnread}</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           {activePeers.map((peer) => {
@@ -236,9 +260,18 @@ export default function AppScreen() {
                 ]}
                 onPress={() => setSelectedTargetId(peer.id)}
               >
-                <Text style={[styles.channelChipText, isSel && styles.activeChannelText]}>
-                  @{peer.nickname} {unread > 0 ? `(${unread})` : ''}
+                <Text style={[
+                  styles.channelChipText,
+                  isSel && styles.activeChannelText,
+                  unread > 0 && !isSel && styles.unreadChannelText
+                ]}>
+                  @{peer.nickname}
                 </Text>
+                {unread > 0 && !isSel && (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>{unread}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -249,11 +282,8 @@ export default function AppScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Main Timeline & Input Screen */}
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/* Main Timeline & Input */}
+      <View style={[styles.keyboardView, keyboardHeight > 0 && { marginBottom: keyboardHeight }]}>
         <View style={styles.chatContainer}>
           <FlatList
             ref={flatListRef}
@@ -278,6 +308,8 @@ export default function AppScreen() {
             }}
             contentContainerStyle={styles.timelineList}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyTitle}>No messages yet</Text>
@@ -318,7 +350,7 @@ export default function AppScreen() {
             <Text style={styles.sendBtnText}>Send</Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       {/* Modals */}
       <ConnectModal
@@ -364,20 +396,25 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   channelChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 18,
     backgroundColor: '#1E293B',
     borderWidth: 1,
     borderColor: '#334155',
+    gap: 6,
   },
   activeChannelChip: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#6366F1',
+    backgroundColor: '#6366F1',
+    borderColor: '#818CF8',
+    elevation: 3,
   },
   unreadChannelChip: {
-    backgroundColor: 'rgba(99, 102, 241, 0.3)',
-    borderColor: '#818CF8',
+    backgroundColor: 'rgba(239, 68, 68, 0.22)',
+    borderColor: '#F87171',
+    borderWidth: 1.5,
   },
   channelChipText: {
     color: '#94A3B8',
@@ -386,6 +423,26 @@ const styles = StyleSheet.create({
   },
   activeChannelText: {
     color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  unreadChannelText: {
+    color: '#FCA5A5',
+    fontWeight: 'bold',
+  },
+  unreadBadge: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unreadBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
   },
   keyboardView: {
     flex: 1,
@@ -443,7 +500,9 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    padding: 12,
+    paddingTop: 10,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
     backgroundColor: '#0F172A',
     borderTopWidth: 1,
     borderTopColor: '#1E293B',

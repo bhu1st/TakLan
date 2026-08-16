@@ -37,8 +37,9 @@ class NetworkService {
     try {
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
+        shouldDuckAndroid: false,
         staysActiveInBackground: true,
+        playThroughEarpieceAndroid: false,
       });
     } catch (err) {
       console.warn('[Android Audio] Init audio mode error:', err);
@@ -48,8 +49,8 @@ class NetworkService {
   private async playPingSound() {
     try {
       const { sound } = await Audio.Sound.createAsync(
-        { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' },
-        { shouldPlay: true }
+        require('../../assets/sounds/ping.mp3'),
+        { shouldPlay: true, volume: 1.0 }
       );
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {
@@ -58,6 +59,22 @@ class NetworkService {
       });
     } catch (err) {
       console.warn('[Android Audio] Error playing sound:', err);
+    }
+  }
+
+  private async playMessageSound() {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require('../../assets/sounds/message.mp3'),
+        { shouldPlay: true, volume: 1.0 }
+      );
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
+    } catch (err) {
+      console.warn('[Android Audio] Error playing message sound:', err);
     }
   }
 
@@ -513,6 +530,12 @@ class NetworkService {
         }
         case 'CHAT': {
           const chat: ChatMessage = JSON.parse(packet.payload);
+          if (chat.senderId !== this.myPeer.id) {
+            try {
+              Vibration.vibrate([0, 120]);
+            } catch (_) { }
+            this.playMessageSound();
+          }
           this.emit('new-message', chat);
           break;
         }
