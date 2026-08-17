@@ -10,9 +10,11 @@ export interface Peer {
 export interface ChatMessage {
   id: string;
   senderId: string;
+  senderHostname?: string;
   senderNick: string;
   senderIp: string;
   targetId: string;
+  targetHostname?: string;
   content: string;
   timestamp: number;
 }
@@ -29,11 +31,14 @@ export interface PingAlert {
 export interface FileOffer {
   transferId: string;
   senderId: string;
+  senderHostname?: string;
   senderNick: string;
   senderIp: string;
   targetId: string;
+  targetHostname?: string;
   fileName: string;
   fileSize: number;
+  savePath?: string;
   timestamp: number;
 }
 

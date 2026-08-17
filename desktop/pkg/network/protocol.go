@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-
-
 // MessageType defines the type of message sent over TCP connection
 type MessageType string
 
@@ -57,13 +55,15 @@ type PeerListPayload struct {
 
 // ChatMessagePayload represents a text chat message
 type ChatMessagePayload struct {
-	ID         string `json:"id"`
-	SenderID   string `json:"senderId"`
-	SenderNick string `json:"senderNick"`
-	SenderIP   string `json:"senderIp"`
-	TargetID   string `json:"targetId"` // Empty for public channel, PeerID for private
-	Content    string `json:"content"`
-	Timestamp  int64  `json:"timestamp"`
+	ID             string `json:"id"`
+	SenderID       string `json:"senderId"`
+	SenderHostname string `json:"senderHostname"`
+	SenderNick     string `json:"senderNick"`
+	SenderIP       string `json:"senderIp"`
+	TargetID       string `json:"targetId"`       // Empty for public channel, PeerID for private
+	TargetHostname string `json:"targetHostname"` // Empty for public channel, Hostname for private
+	Content        string `json:"content"`
+	Timestamp      int64  `json:"timestamp"`
 }
 
 // PingPayload represents a buzz / ping alert to a user
@@ -83,14 +83,16 @@ type NickUpdatePayload struct {
 
 // FileOfferPayload sent when initiating a file transfer
 type FileOfferPayload struct {
-	TransferID string `json:"transferId"`
-	SenderID   string `json:"senderId"`
-	SenderNick string `json:"senderNick"`
-	SenderIP   string `json:"senderIp"`
-	TargetID   string `json:"targetId"`
-	FileName   string `json:"fileName"`
-	FileSize   int64  `json:"fileSize"`
-	Timestamp  int64  `json:"timestamp"`
+	TransferID     string `json:"transferId"`
+	SenderID       string `json:"senderId"`
+	SenderHostname string `json:"senderHostname,omitempty"`
+	SenderNick     string `json:"senderNick"`
+	SenderIP       string `json:"senderIp"`
+	TargetID       string `json:"targetId"`
+	TargetHostname string `json:"targetHostname,omitempty"`
+	FileName       string `json:"fileName"`
+	FileSize       int64  `json:"fileSize"`
+	Timestamp      int64  `json:"timestamp"`
 }
 
 // FileResponsePayload sent when recipient accepts or rejects file
@@ -111,10 +113,10 @@ type FileChunkPayload struct {
 
 // FileStatusPayload reports progress or completion
 type FileStatusPayload struct {
-	TransferID string `json:"transferId"`
-	Status     string `json:"status"` // "transferring", "completed", "rejected", "failed"
+	TransferID string  `json:"transferId"`
+	Status     string  `json:"status"`   // "transferring", "completed", "rejected", "failed"
 	Progress   float64 `json:"progress"` // 0 to 100
-	Error      string `json:"error,omitempty"`
+	Error      string  `json:"error,omitempty"`
 }
 
 func CurrentTimestamp() int64 {
@@ -132,4 +134,3 @@ func MarshalPayload(v interface{}) (string, error) {
 func UnmarshalPayload(payloadStr string, v interface{}) error {
 	return json.Unmarshal([]byte(payloadStr), v)
 }
-

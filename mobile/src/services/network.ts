@@ -1,8 +1,9 @@
 import * as Network from 'expo-network';
+import * as Device from 'expo-device';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
-import { Vibration } from 'react-native';
+import { Vibration, Linking } from 'react-native';
 import { Peer, ChatMessage, FileOffer, FileProgress, PingAlert, Packet } from '../types/network';
 
 type EventListener = (data: any) => void;
@@ -94,13 +95,42 @@ class NetworkService {
     return this.serverAddr;
   }
 
+  private async getPersistentDeviceId(): Promise<string> {
+    const fileUri = `${FileSystem.documentDirectory}device_id.txt`;
+    try {
+      const info = await FileSystem.getInfoAsync(fileUri);
+      if (info.exists) {
+        const id = await FileSystem.readAsStringAsync(fileUri);
+        if (id && id.trim()) {
+          return id.trim();
+        }
+      }
+    } catch (e) {
+      console.warn('[Android Network] Error reading device_id file:', e);
+    }
+
+    const newId = Math.random().toString(36).substring(2, 10);
+    try {
+      await FileSystem.writeAsStringAsync(fileUri, newId);
+    } catch (e) {
+      console.warn('[Android Network] Error saving device_id file:', e);
+    }
+    return newId;
+  }
+
   private async initDeviceIp() {
     try {
+      const persistentId = await this.getPersistentDeviceId();
+      const deviceModel = Device.modelName || Device.deviceName || 'AndroidDevice';
+      const cleanModel = deviceModel.replace(/[^a-zA-Z0-9_-]/g, '');
+
+      this.myPeer.hostname = `${cleanModel}-${persistentId}`;
+      this.myPeer.id = `android-${persistentId}`;
+
       const ip = await Network.getIpAddressAsync();
       if (ip && ip !== '0.0.0.0' && ip !== '127.0.0.1') {
         this.myPeer.ip = ip;
-        this.myPeer.nickname = `Android-${ip.split('.').pop() || 'Mobile'}`;
-        this.myPeer.hostname = `Android-${ip}`;
+        this.myPeer.nickname = `${Device.deviceName || 'Android'}-${ip.split('.').pop() || 'Mobile'}`;
         this.emit('peer-info-updated', this.myPeer);
 
         // Fast isolated subnet auto-discovery
@@ -334,13 +364,18 @@ class NetworkService {
     this.emit('connection-status', { connected: false });
   }
 
-  public sendChatMessage(targetId: string, content: string) {
+  public sendChatMessage(targetId: string, content: string, targetHostname: string = '') {
+    const targetPeer = this.currentPeers.find(p => p.id === targetId || p.hostname === targetId);
+    const resolvedTargetHostname = targetHostname || targetPeer?.hostname || '';
+
     const msg: ChatMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       senderId: this.myPeer.id,
+      senderHostname: this.myPeer.hostname,
       senderNick: this.myPeer.nickname,
       senderIp: this.myPeer.ip,
       targetId,
+      targetHostname: resolvedTargetHostname,
       content,
       timestamp: Date.now(),
     };
@@ -365,7 +400,7 @@ class NetworkService {
     this.sendPacket({ type: 'PING', payload });
   }
 
-  public async pickAndSendFile(targetId: string): Promise<boolean> {
+  public async pickAndSendFile(targetId: string, targetHostname: string = ''): Promise<boolean> {
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: '*/*',
@@ -375,6 +410,9 @@ class NetworkService {
       if (res.canceled || !res.assets || res.assets.length === 0) {
         return false;
       }
+
+      const targetPeer = this.currentPeers.find(p => p.id === targetId || p.hostname === targetId);
+      const resolvedTargetHostname = targetHostname || targetPeer?.hostname || '';
 
       const asset = res.assets[0];
       const transferId = `tr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
@@ -387,9 +425,11 @@ class NetworkService {
       const offer: FileOffer = {
         transferId,
         senderId: this.myPeer.id,
+        senderHostname: this.myPeer.hostname,
         senderNick: this.myPeer.nickname,
         senderIp: this.myPeer.ip,
         targetId,
+        targetHostname: resolvedTargetHostname,
         fileName,
         fileSize,
         timestamp: Date.now(),
@@ -579,7 +619,7 @@ class NetworkService {
               await FileSystem.writeAsStringAsync(transferInfo.fileUri, dataB64, {
                 encoding: 'base64',
                 append: true,
-              });
+              } as any);
             } catch (err) {
               console.warn('[Android Network] Error writing chunk to file:', err);
             }
@@ -598,7 +638,6 @@ class NetworkService {
           });
           break;
         }
-        case 'FILE_PROGRESS':
         case 'FILE_STATUS': {
           const progress: FileProgress = JSON.parse(packet.payload);
           this.emit('file-progress', progress);
@@ -607,6 +646,20 @@ class NetworkService {
       }
     } catch (e) {
       console.warn('[Android Network] Error handling packet:', e);
+    }
+  }
+
+  public async openFile(filePath: string) {
+    if (!filePath) return;
+    try {
+      if (filePath.startsWith('content://') || filePath.startsWith('http://') || filePath.startsWith('https://')) {
+        await Linking.openURL(filePath);
+      } else {
+        const contentUri = await FileSystem.getContentUriAsync(filePath);
+        await Linking.openURL(contentUri);
+      }
+    } catch (err) {
+      console.warn('[Android Network] Failed to open file:', err);
     }
   }
 

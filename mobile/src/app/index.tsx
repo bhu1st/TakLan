@@ -301,6 +301,7 @@ export default function AppScreen() {
                     isMe={item.fileOffer.senderId === myPeer.id}
                     onAccept={(id) => networkService.acceptFileTransfer(id)}
                     onReject={(id) => networkService.rejectFileTransfer(id)}
+                    onOpenFile={(savePath) => networkService.openFile(savePath)}
                   />
                 );
               }

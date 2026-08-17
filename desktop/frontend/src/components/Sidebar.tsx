@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import packageJson from '../../package.json';
 import { Peer, LastMessageInfo } from '../types';
-import { Users, Bell, Server, Search, Hash, Wifi } from 'lucide-react';
+import { Users, Bell, Search, Hash, Wifi } from 'lucide-react';
 
 interface SidebarProps {
   myPeer: Peer;
   isHost: boolean;
   serverAddr: string;
   peers: Peer[];
-  selectedTargetId: string; // "" for public channel, or peerId for DM
+  selectedTargetId: string; // "" for public channel, or peerId/hostname for DM
   unreadCounts: Record<string, number>;
   lastMessages: Record<string, LastMessageInfo>;
-  onSelectTarget: (targetId: string) => void;
+  onSelectTarget: (targetId: string, targetHostname?: string) => void;
   onSendPing: (targetId: string) => void;
 }
 
@@ -29,22 +29,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [search, setSearch] = useState('');
 
   // Filter out self and match search
-  const activePeers = peers.filter(p => p.id !== myPeer.id);
+  const activePeers = peers.filter(p => p.hostname !== myPeer.hostname && p.id !== myPeer.id);
   const filteredPeers = activePeers.filter(p =>
     p.nickname.toLowerCase().includes(search.toLowerCase()) ||
     p.ip.includes(search) ||
     p.hostname.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Sort peers: peers with unread messages top, then by most recent message, then alphabetically
+  // Sort peers: online first, then unread messages, then by most recent message, then alphabetically
   const sortedPeers = [...filteredPeers].sort((a, b) => {
-    const unreadA = unreadCounts[a.id] || 0;
-    const unreadB = unreadCounts[b.id] || 0;
+    const isOnlineA = a.isOnline !== false ? 1 : 0;
+    const isOnlineB = b.isOnline !== false ? 1 : 0;
+    if (isOnlineA !== isOnlineB) {
+      return isOnlineB - isOnlineA;
+    }
+
+    const keyA = a.hostname || a.id;
+    const keyB = b.hostname || b.id;
+    const unreadA = unreadCounts[keyA] || unreadCounts[a.id] || 0;
+    const unreadB = unreadCounts[keyB] || unreadCounts[b.id] || 0;
     if (unreadA !== unreadB) {
       return unreadB - unreadA;
     }
-    const timeA = lastMessages[a.id]?.timestamp || 0;
-    const timeB = lastMessages[b.id]?.timestamp || 0;
+    const timeA = lastMessages[keyA]?.timestamp || lastMessages[a.id]?.timestamp || 0;
+    const timeB = lastMessages[keyB]?.timestamp || lastMessages[b.id]?.timestamp || 0;
     if (timeA !== timeB) {
       return timeB - timeA;
     }
@@ -65,6 +73,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (diffHour < 24) return `${diffHour}h`;
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  const onlineCount = peers.filter(p => p.isOnline !== false && p.id !== myPeer.id && p.hostname !== myPeer.hostname).length;
 
   return (
     <aside className="w-80 h-full flex flex-col glass-panel border-r border-slate-800 select-none">
@@ -139,7 +149,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           Channels
         </div>
         <button
-          onClick={() => onSelectTarget('')}
+          onClick={() => onSelectTarget('', '')}
           className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${selectedTargetId === ''
             ? 'bg-indigo-600/90 text-white shadow-md shadow-indigo-600/20'
             : generalUnread > 0
@@ -175,7 +185,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
             ) : (
               <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-900/50 text-indigo-200 font-mono">
-                {peers.length} online
+                {onlineCount} online
               </span>
             )}
           </div>
@@ -187,7 +197,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center justify-between px-2 mb-2">
           <div className="text-[11px] font-bold text-slate-400 tracking-wider uppercase flex items-center gap-1.5">
             <Users className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Connected Devices ({activePeers.length})</span>
+            <span>Devices ({activePeers.length})</span>
           </div>
         </div>
 
@@ -196,7 +206,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
           <input
             type="text"
-            placeholder="Search nickname or IP..."
+            placeholder="Search nickname, hostname or IP..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg glass-input text-slate-200 placeholder-slate-500 focus:outline-none"
@@ -225,19 +235,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           ) : (
             sortedPeers.map(peer => {
-              const isSelected = selectedTargetId === peer.id;
-              const unreadCount = unreadCounts[peer.id] || 0;
-              const lastMsg = lastMessages[peer.id];
+              const peerKey = peer.hostname || peer.id;
+              const isSelected = selectedTargetId === peer.id || selectedTargetId === peer.hostname;
+              const unreadCount = unreadCounts[peerKey] || unreadCounts[peer.id] || 0;
+              const lastMsg = lastMessages[peerKey] || lastMessages[peer.id];
+              const isOnline = peer.isOnline !== false;
 
               return (
                 <div
-                  key={peer.id}
-                  onClick={() => onSelectTarget(peer.id)}
+                  key={peer.id || peer.hostname}
+                  onClick={() => onSelectTarget(peer.id, peer.hostname)}
                   className={`group flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${isSelected
                     ? 'bg-slate-800/90 text-white border border-indigo-500/40 shadow-lg shadow-indigo-500/10'
                     : unreadCount > 0
                       ? 'bg-gradient-to-r from-indigo-950/90 to-slate-900/90 border-2 border-indigo-500/70 text-slate-100 shadow-md shadow-indigo-500/20 ring-1 ring-indigo-500/40'
-                      : 'hover:bg-slate-800/40 text-slate-300'
+                      : !isOnline
+                        ? 'opacity-65 hover:opacity-100 hover:bg-slate-900/50 text-slate-400'
+                        : 'hover:bg-slate-800/40 text-slate-300'
                     }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -247,14 +261,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         ? 'bg-indigo-600 text-white'
                         : unreadCount > 0
                           ? 'bg-gradient-to-tr from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/40'
-                          : 'bg-slate-700 text-slate-200'
+                          : !isOnline
+                            ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                            : 'bg-slate-700 text-slate-200'
                         }`}>
                         {peer.nickname.charAt(0).toUpperCase()}
                       </div>
                       {unreadCount > 0 ? (
                         <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-indigo-500 border-2 border-slate-900 animate-pulse" />
-                      ) : (
+                      ) : isOnline ? (
                         <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-slate-900" />
+                      ) : (
+                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-slate-600 border-2 border-slate-900" />
                       )}
                     </div>
 
@@ -269,6 +287,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           {peer.isHost && (
                             <span className="text-[9px] px-1 rounded bg-indigo-500/20 text-indigo-300 shrink-0">
                               Host
+                            </span>
+                          )}
+                          {!isOnline && (
+                            <span className="text-[9px] px-1 rounded bg-slate-800 text-slate-500 border border-slate-700/60 shrink-0">
+                              Offline
                             </span>
                           )}
                         </div>
@@ -289,7 +312,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           </p>
                         ) : (
                           <div className="text-[10px] font-mono text-cyan-400/90 flex items-center gap-1">
-                            <span>{peer.ip}</span>
+                            <span>{peer.hostname || peer.ip}</span>
                           </div>
                         )}
                       </div>
@@ -302,7 +325,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md shadow-indigo-500/30 animate-bounce">
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </span>
-                    ) : (
+                    ) : isOnline ? (
                       <button
                         onClick={e => {
                           e.stopPropagation();
@@ -313,7 +336,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       >
                         <Bell className="w-3.5 h-3.5" />
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               );
@@ -335,4 +358,3 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </aside>
   );
 };
-

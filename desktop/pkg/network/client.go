@@ -99,15 +99,17 @@ func (c *Client) SendPacket(packet Packet) error {
 }
 
 // SendChatMessage sends a text message
-func (c *Client) SendChatMessage(msgID, targetID, content string) error {
+func (c *Client) SendChatMessage(msgID, targetID, targetHostname, content string) error {
 	payload, _ := json.Marshal(ChatMessagePayload{
-		ID:         msgID,
-		SenderID:   c.peer.ID,
-		SenderNick: c.peer.Nickname,
-		SenderIP:   c.peer.IP,
-		TargetID:   targetID,
-		Content:    content,
-		Timestamp:  CurrentTimestamp(),
+		ID:             msgID,
+		SenderID:       c.peer.ID,
+		SenderHostname: c.peer.Hostname,
+		SenderNick:     c.peer.Nickname,
+		SenderIP:       c.peer.IP,
+		TargetID:       targetID,
+		TargetHostname: targetHostname,
+		Content:        content,
+		Timestamp:      CurrentTimestamp(),
 	})
 	return c.SendPacket(Packet{Type: TypeChat, Payload: string(payload)})
 }

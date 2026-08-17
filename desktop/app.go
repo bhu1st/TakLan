@@ -4,8 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"time"
 
+	"lanmsngr/pkg/db"
 	"lanmsngr/pkg/filetransfer"
 	"lanmsngr/pkg/network"
 	"lanmsngr/pkg/sysinfo"
@@ -15,16 +19,27 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+type CombinedPeer struct {
+	ID       string `json:"id"`
+	Nickname string `json:"nickname"`
+	IP       string `json:"ip"`
+	Hostname string `json:"hostname"`
+	IsHost   bool   `json:"isHost"`
+	JoinedAt int64  `json:"joinedAt"`
+	IsOnline bool   `json:"isOnline"`
+}
+
 type InitialState struct {
 	MyPeer     network.Peer   `json:"myPeer"`
 	IsHost     bool           `json:"isHost"`
 	ServerAddr string         `json:"serverAddr"`
-	Peers      []network.Peer `json:"peers"`
+	Peers      []CombinedPeer `json:"peers"`
 }
 
 // App struct
 type App struct {
 	ctx        context.Context
+	database   *db.Database
 	tray       *systray.Tray
 	server     *network.Server
 	client     *network.Client
@@ -47,6 +62,13 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
+	database, err := db.InitDB()
+	if err != nil {
+		log.Printf("[App] Failed to initialize database: %v", err)
+	} else {
+		a.database = database
+	}
+
 	a.tray = systray.Start("LAN Msngr", func() {
 		wailsRuntime.WindowShow(a.ctx)
 		wailsRuntime.WindowUnminimise(a.ctx)
@@ -68,6 +90,10 @@ func (a *App) startup(ctx context.Context) {
 		JoinedAt: time.Now().UnixMilli(),
 	}
 	a.serverAddr = fmt.Sprintf("%s:%d", localIP, network.TCPDefaultPort)
+
+	if a.database != nil {
+		_ = a.database.UpsertPeer(a.myPeer.Hostname, a.myPeer.ID, a.myPeer.Nickname, a.myPeer.IP, a.myPeer.IsHost)
+	}
 
 	go func() {
 		// Server Auto-Discovery & Election
@@ -105,6 +131,10 @@ func (a *App) startup(ctx context.Context) {
 			}
 		}
 
+		if a.database != nil {
+			_ = a.database.UpsertPeer(a.myPeer.Hostname, a.myPeer.ID, a.myPeer.Nickname, a.myPeer.IP, a.myPeer.IsHost)
+		}
+
 		// Initialize TCP Client connection to server
 		cli := network.NewClient(a.serverAddr, a.myPeer, a.onPacketReceived)
 		if err := cli.Connect(); err != nil {
@@ -118,8 +148,56 @@ func (a *App) startup(ctx context.Context) {
 	}()
 }
 
+func (a *App) getCombinedPeers() []CombinedPeer {
+	var result []CombinedPeer
+	onlineMap := make(map[string]bool)
+
+	for _, p := range a.peers {
+		if p.Hostname == a.myPeer.Hostname {
+			continue
+		}
+		onlineMap[p.Hostname] = true
+		result = append(result, CombinedPeer{
+			ID:       p.ID,
+			Nickname: p.Nickname,
+			IP:       p.IP,
+			Hostname: p.Hostname,
+			IsHost:   p.IsHost,
+			JoinedAt: p.JoinedAt,
+			IsOnline: true,
+		})
+	}
+
+	if a.database != nil {
+		knownPeers, err := a.database.GetKnownPeers()
+		if err == nil {
+			for _, kp := range knownPeers {
+				if kp.Hostname == a.myPeer.Hostname {
+					continue
+				}
+				if !onlineMap[kp.Hostname] {
+					result = append(result, CombinedPeer{
+						ID:       kp.ID,
+						Nickname: kp.Nickname,
+						IP:       kp.IP,
+						Hostname: kp.Hostname,
+						IsHost:   kp.IsHost,
+						JoinedAt: kp.LastSeen,
+						IsOnline: false,
+					})
+				}
+			}
+		}
+	}
+
+	return result
+}
+
 // shutdown is called when the app closes
 func (a *App) shutdown(ctx context.Context) {
+	if a.database != nil {
+		a.database.Close()
+	}
 	if a.tray != nil {
 		a.tray.Stop()
 	}
@@ -136,6 +214,31 @@ func (a *App) MinimizeToTray() {
 	wailsRuntime.WindowHide(a.ctx)
 }
 
+func (a *App) resolvePeerHostname(peerID string) string {
+	if peerID == "" {
+		return ""
+	}
+	if peerID == a.myPeer.ID || peerID == a.myPeer.Hostname {
+		return a.myPeer.Hostname
+	}
+	for _, p := range a.peers {
+		if p.ID == peerID || p.Hostname == peerID {
+			return p.Hostname
+		}
+	}
+	if a.database != nil {
+		knownPeers, err := a.database.GetKnownPeers()
+		if err == nil {
+			for _, kp := range knownPeers {
+				if kp.ID == peerID || kp.Hostname == peerID {
+					return kp.Hostname
+				}
+			}
+		}
+	}
+	return peerID
+}
+
 // onPacketReceived handles network packets on client node
 func (a *App) onPacketReceived(packet network.Packet) {
 	switch packet.Type {
@@ -143,20 +246,49 @@ func (a *App) onPacketReceived(packet network.Packet) {
 		var ack network.JoinAckPayload
 		if err := network.UnmarshalPayload(packet.Payload, &ack); err == nil {
 			a.peers = ack.Peers
+			if a.database != nil {
+				for _, p := range a.peers {
+					_ = a.database.UpsertPeer(p.Hostname, p.ID, p.Nickname, p.IP, p.IsHost)
+				}
+			}
 			wailsRuntime.EventsEmit(a.ctx, "joined-ack", ack)
-			wailsRuntime.EventsEmit(a.ctx, "peers-updated", a.peers)
+			wailsRuntime.EventsEmit(a.ctx, "peers-updated", a.getCombinedPeers())
 		}
 
 	case network.TypePeerList:
 		var payload network.PeerListPayload
 		if err := network.UnmarshalPayload(packet.Payload, &payload); err == nil {
 			a.peers = payload.Peers
-			wailsRuntime.EventsEmit(a.ctx, "peers-updated", a.peers)
+			if a.database != nil {
+				for _, p := range a.peers {
+					_ = a.database.UpsertPeer(p.Hostname, p.ID, p.Nickname, p.IP, p.IsHost)
+				}
+			}
+			wailsRuntime.EventsEmit(a.ctx, "peers-updated", a.getCombinedPeers())
 		}
 
 	case network.TypeChat:
 		var chat network.ChatMessagePayload
 		if err := network.UnmarshalPayload(packet.Payload, &chat); err == nil {
+			if chat.SenderHostname == "" {
+				chat.SenderHostname = a.resolvePeerHostname(chat.SenderID)
+			}
+			if chat.TargetID != "" && chat.TargetHostname == "" {
+				chat.TargetHostname = a.resolvePeerHostname(chat.TargetID)
+			}
+
+			if a.database != nil {
+				_ = a.database.SaveMessage(db.MessageRecord{
+					ID:             chat.ID,
+					SenderID:       chat.SenderID,
+					SenderHostname: chat.SenderHostname,
+					SenderNick:     chat.SenderNick,
+					SenderIP:       chat.SenderIP,
+					TargetHostname: chat.TargetHostname,
+					Content:        chat.Content,
+					Timestamp:      chat.Timestamp,
+				})
+			}
 			wailsRuntime.EventsEmit(a.ctx, "new-message", chat)
 		}
 
@@ -172,13 +304,52 @@ func (a *App) onPacketReceived(packet network.Packet) {
 	case network.TypeFileOffer:
 		var offer network.FileOfferPayload
 		if err := network.UnmarshalPayload(packet.Payload, &offer); err == nil {
+			if offer.SenderHostname == "" {
+				offer.SenderHostname = a.resolvePeerHostname(offer.SenderID)
+			}
+			if offer.TargetID != "" && offer.TargetHostname == "" {
+				offer.TargetHostname = a.resolvePeerHostname(offer.TargetID)
+			}
+
 			a.fileMgr.RegisterIncomingOffer(offer.TransferID, offer.SenderID, offer.SenderNick, offer.TargetID, offer.FileName, offer.FileSize)
+			if a.database != nil {
+				_ = a.database.SaveFileOffer(db.FileOfferRecord{
+					TransferID:     offer.TransferID,
+					SenderID:       offer.SenderID,
+					SenderHostname: offer.SenderHostname,
+					SenderNick:     offer.SenderNick,
+					SenderIP:       offer.SenderIP,
+					TargetHostname: offer.TargetHostname,
+					FileName:       offer.FileName,
+					FileSize:       offer.FileSize,
+					Status:         "offered",
+					SavePath:       "",
+					Timestamp:      offer.Timestamp,
+				})
+			}
 			wailsRuntime.EventsEmit(a.ctx, "file-offer", offer)
 		}
 
 	case network.TypeFileResponse:
 		var resp network.FileResponsePayload
 		if err := network.UnmarshalPayload(packet.Payload, &resp); err == nil {
+			statusStr := "rejected"
+			if resp.Accepted {
+				statusStr = "transferring"
+			}
+			if a.database != nil {
+				if resp.RecipientID == a.myPeer.ID {
+					_ = a.database.UpdateFileStatus(resp.TransferID, statusStr, resp.SavePath)
+				} else {
+					_ = a.database.UpdateFileStatus(resp.TransferID, statusStr, "")
+				}
+			}
+
+			// Don't overwrite sender's local path with recipient's phone path
+			if resp.RecipientID != a.myPeer.ID {
+				resp.SavePath = ""
+			}
+
 			wailsRuntime.EventsEmit(a.ctx, "file-response", resp)
 			if resp.Accepted && resp.RecipientID != a.myPeer.ID {
 				// We are the sender and recipient accepted! Start chunk stream
@@ -197,6 +368,9 @@ func (a *App) onPacketReceived(packet network.Packet) {
 						Progress:   progress,
 						Error:      errStr,
 					})
+					if a.database != nil {
+						_ = a.database.UpdateFileStatus(resp.TransferID, status, "")
+					}
 					a.client.SendPacket(network.Packet{Type: network.TypeFileStatus, Payload: statusPayload})
 				})
 			}
@@ -215,6 +389,10 @@ func (a *App) onPacketReceived(packet network.Packet) {
 				statusStr = "completed"
 			}
 
+			if a.database != nil {
+				_ = a.database.UpdateFileStatus(chunk.TransferID, statusStr, "")
+			}
+
 			statusPayload := network.FileStatusPayload{
 				TransferID: chunk.TransferID,
 				Status:     statusStr,
@@ -227,6 +405,9 @@ func (a *App) onPacketReceived(packet network.Packet) {
 	case network.TypeFileStatus:
 		var status network.FileStatusPayload
 		if err := network.UnmarshalPayload(packet.Payload, &status); err == nil {
+			if a.database != nil {
+				_ = a.database.UpdateFileStatus(status.TransferID, status.Status, "")
+			}
 			wailsRuntime.EventsEmit(a.ctx, "file-progress", status)
 		}
 	}
@@ -240,7 +421,38 @@ func (a *App) GetInitialState() InitialState {
 		MyPeer:     a.myPeer,
 		IsHost:     a.isHost,
 		ServerAddr: a.serverAddr,
-		Peers:      a.peers,
+		Peers:      a.getCombinedPeers(),
+	}
+}
+
+// GetMessageHistory returns messages for target hostname/ID with cursor pagination
+func (a *App) GetMessageHistory(targetHostname, targetID string, beforeTimestamp int64, limit int) ([]db.MessageRecord, error) {
+	if a.database == nil {
+		return []db.MessageRecord{}, nil
+	}
+	return a.database.GetMessages(targetHostname, targetID, a.myPeer.Hostname, a.myPeer.ID, beforeTimestamp, limit)
+}
+
+// GetFileOffersHistory returns historical file offers with cursor pagination
+func (a *App) GetFileOffersHistory(targetHostname, targetID string, beforeTimestamp int64, limit int) ([]db.FileOfferRecord, error) {
+	if a.database == nil {
+		return []db.FileOfferRecord{}, nil
+	}
+	return a.database.GetFileOffers(targetHostname, targetID, a.myPeer.Hostname, a.myPeer.ID, beforeTimestamp, limit)
+}
+
+// OpenFile opens a local file or folder with system default application
+func (a *App) OpenFile(filePath string) error {
+	if filePath == "" {
+		return fmt.Errorf("file path is empty")
+	}
+	cleanPath := filepath.Clean(filePath)
+	if runtime.GOOS == "windows" {
+		return exec.Command("cmd", "/c", "start", "", cleanPath).Run()
+	} else if runtime.GOOS == "darwin" {
+		return exec.Command("open", cleanPath).Run()
+	} else {
+		return exec.Command("xdg-open", cleanPath).Run()
 	}
 }
 
@@ -250,6 +462,9 @@ func (a *App) SetNickname(newNick string) (bool, error) {
 		return false, fmt.Errorf("nickname cannot be empty")
 	}
 	a.myPeer.Nickname = newNick
+	if a.database != nil {
+		_ = a.database.UpsertPeer(a.myPeer.Hostname, a.myPeer.ID, a.myPeer.Nickname, a.myPeer.IP, a.myPeer.IsHost)
+	}
 	if a.client != nil {
 		if err := a.client.UpdateNickname(newNick); err != nil {
 			return false, err
@@ -259,12 +474,45 @@ func (a *App) SetNickname(newNick string) (bool, error) {
 }
 
 // SendChatMessage sends a message to public channel or direct target
-func (a *App) SendChatMessage(targetID, content string) error {
-	if a.client == nil {
-		return fmt.Errorf("client not connected")
-	}
+func (a *App) SendChatMessage(targetID, targetHostname, content string) error {
 	msgID := uuid.New().String()[:8]
-	return a.client.SendChatMessage(msgID, targetID, content)
+	now := network.CurrentTimestamp()
+
+	if targetHostname == "" && targetID != "" {
+		targetHostname = a.resolvePeerHostname(targetID)
+	}
+
+	msgPayload := network.ChatMessagePayload{
+		ID:             msgID,
+		SenderID:       a.myPeer.ID,
+		SenderHostname: a.myPeer.Hostname,
+		SenderNick:     a.myPeer.Nickname,
+		SenderIP:       a.myPeer.IP,
+		TargetID:       targetID,
+		TargetHostname: targetHostname,
+		Content:        content,
+		Timestamp:      now,
+	}
+
+	if a.database != nil {
+		_ = a.database.SaveMessage(db.MessageRecord{
+			ID:             msgID,
+			SenderID:       a.myPeer.ID,
+			SenderHostname: a.myPeer.Hostname,
+			SenderNick:     a.myPeer.Nickname,
+			SenderIP:       a.myPeer.IP,
+			TargetHostname: targetHostname,
+			Content:        content,
+			Timestamp:      now,
+		})
+	}
+
+	wailsRuntime.EventsEmit(a.ctx, "new-message", msgPayload)
+
+	if a.client != nil {
+		return a.client.SendChatMessage(msgID, targetID, targetHostname, content)
+	}
+	return nil
 }
 
 // SendPing sends a buzz alert to a peer or all peers
@@ -290,30 +538,52 @@ func (a *App) SelectAndSendFile(targetID string) (string, error) {
 		return "", err
 	}
 
+	targetHost := a.resolvePeerHostname(targetID)
+
 	offerPayload, _ := network.MarshalPayload(network.FileOfferPayload{
-		TransferID: transferID,
-		SenderID:   a.myPeer.ID,
-		SenderNick: a.myPeer.Nickname,
-		SenderIP:   a.myPeer.IP,
-		TargetID:   targetID,
-		FileName:   state.FileName,
-		FileSize:   state.FileSize,
-		Timestamp:  network.CurrentTimestamp(),
+		TransferID:     transferID,
+		SenderID:       a.myPeer.ID,
+		SenderHostname: a.myPeer.Hostname,
+		SenderNick:     a.myPeer.Nickname,
+		SenderIP:       a.myPeer.IP,
+		TargetID:       targetID,
+		TargetHostname: targetHost,
+		FileName:       state.FileName,
+		FileSize:       state.FileSize,
+		Timestamp:      network.CurrentTimestamp(),
 	})
+
+	if a.database != nil {
+		_ = a.database.SaveFileOffer(db.FileOfferRecord{
+			TransferID:     transferID,
+			SenderID:       a.myPeer.ID,
+			SenderHostname: a.myPeer.Hostname,
+			SenderNick:     a.myPeer.Nickname,
+			SenderIP:       a.myPeer.IP,
+			TargetHostname: targetHost,
+			FileName:       state.FileName,
+			FileSize:       state.FileSize,
+			Status:         "offered",
+			SavePath:       filePath,
+			Timestamp:      network.CurrentTimestamp(),
+		})
+	}
 
 	if err := a.client.SendPacket(network.Packet{Type: network.TypeFileOffer, Payload: offerPayload}); err != nil {
 		return "", err
 	}
 
 	wailsRuntime.EventsEmit(a.ctx, "file-offer", network.FileOfferPayload{
-		TransferID: transferID,
-		SenderID:   a.myPeer.ID,
-		SenderNick: a.myPeer.Nickname,
-		SenderIP:   a.myPeer.IP,
-		TargetID:   targetID,
-		FileName:   state.FileName,
-		FileSize:   state.FileSize,
-		Timestamp:  network.CurrentTimestamp(),
+		TransferID:     transferID,
+		SenderID:       a.myPeer.ID,
+		SenderHostname: a.myPeer.Hostname,
+		SenderNick:     a.myPeer.Nickname,
+		SenderIP:       a.myPeer.IP,
+		TargetID:       targetID,
+		TargetHostname: targetHost,
+		FileName:       state.FileName,
+		FileSize:       state.FileSize,
+		Timestamp:      network.CurrentTimestamp(),
 	})
 
 	return transferID, nil
@@ -326,19 +596,21 @@ func (a *App) AcceptFileTransfer(transferID string) error {
 		return fmt.Errorf("transfer offer not found")
 	}
 
-	// PROMPT RECIPIENT PER TRANSFER USING WAILS NATIVE SAVE DIALOG
 	savePath, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
 		Title:           fmt.Sprintf("Save %s from %s", t.FileName, t.SenderNick),
 		DefaultFilename: t.FileName,
 	})
 
 	if err != nil || savePath == "" {
-		// User cancelled save dialog
 		return a.RejectFileTransfer(transferID)
 	}
 
 	if _, err := a.fileMgr.AcceptTransfer(transferID, savePath); err != nil {
 		return err
+	}
+
+	if a.database != nil {
+		_ = a.database.UpdateFileStatus(transferID, "transferring", savePath)
 	}
 
 	respPayload, _ := network.MarshalPayload(network.FileResponsePayload{
@@ -353,6 +625,9 @@ func (a *App) AcceptFileTransfer(transferID string) error {
 
 // RejectFileTransfer declines incoming file transfer
 func (a *App) RejectFileTransfer(transferID string) error {
+	if a.database != nil {
+		_ = a.database.UpdateFileStatus(transferID, "rejected", "")
+	}
 	respPayload, _ := network.MarshalPayload(network.FileResponsePayload{
 		TransferID:  transferID,
 		RecipientID: a.myPeer.ID,

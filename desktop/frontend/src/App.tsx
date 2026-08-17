@@ -7,6 +7,9 @@ import { PingToast } from './components/PingToast';
 import { playPrivateMessageAlert } from './utils/notification';
 import {
   GetInitialState,
+  GetMessageHistory,
+  GetFileOffersHistory,
+  OpenFile,
   SendChatMessage,
   SendPing,
   SelectAndSendFile,
@@ -35,6 +38,7 @@ export function App() {
   const [peers, setPeers] = useState<Peer[]>([]);
 
   const [selectedTargetId, setSelectedTargetId] = useState<string>(''); // "" for general channel
+  const [selectedTargetHostname, setSelectedTargetHostname] = useState<string>('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [fileOffers, setFileOffers] = useState<FileOffer[]>([]);
   const [fileProgresses, setFileProgresses] = useState<Record<string, FileProgress>>({});
@@ -51,16 +55,20 @@ export function App() {
   }, [myPeer]);
 
   const selectedTargetIdRef = useRef(selectedTargetId);
+  const selectedTargetHostnameRef = useRef(selectedTargetHostname);
   useEffect(() => {
     selectedTargetIdRef.current = selectedTargetId;
-    // Clear unread count for active conversation when selectedTargetId changes
+    selectedTargetHostnameRef.current = selectedTargetHostname;
+
+    const key = selectedTargetHostname || selectedTargetId;
     setUnreadCounts(prev => {
-      if (!prev[selectedTargetId]) return prev;
+      if (!prev[key] && !prev[selectedTargetId]) return prev;
       const next = { ...prev };
+      delete next[key];
       delete next[selectedTargetId];
       return next;
     });
-  }, [selectedTargetId]);
+  }, [selectedTargetId, selectedTargetHostname]);
 
   // Reset title on window focus
   useEffect(() => {
@@ -94,6 +102,190 @@ export function App() {
       window.removeEventListener('resize', handleMinimizeCheck);
     };
   }, []);
+
+  const [hasMoreHistory, setHasMoreHistory] = useState<boolean>(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState<boolean>(false);
+
+  // Load message and file transfer history from SQLite DB with cursor pagination (latest 100 items)
+  useEffect(() => {
+    setMessages([]);
+    setFileOffers([]);
+    setHasMoreHistory(false);
+
+    Promise.all([
+      GetMessageHistory(selectedTargetHostname, selectedTargetId, 0, 100),
+      GetFileOffersHistory(selectedTargetHostname, selectedTargetId, 0, 100),
+    ])
+      .then(([msgHistory, fileHistory]: [any[], any[]]) => {
+        let msgCount = 0;
+        let fileCount = 0;
+
+        if (Array.isArray(msgHistory)) {
+          msgCount = msgHistory.length;
+          const formattedHistory: ChatMessage[] = msgHistory.map(item => ({
+            id: item.id,
+            senderId: item.senderId,
+            senderHostname: item.senderHostname,
+            senderNick: item.senderNick,
+            senderIp: item.senderIp,
+            targetId: item.targetHostname ? item.targetHostname : '',
+            targetHostname: item.targetHostname,
+            content: item.content,
+            timestamp: item.timestamp,
+          }));
+
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const newItems = formattedHistory.filter(m => !existingIds.has(m.id));
+            return [...prev, ...newItems].sort((a, b) => a.timestamp - b.timestamp);
+          });
+        }
+
+        if (Array.isArray(fileHistory)) {
+          fileCount = fileHistory.length;
+          const loadedOffers: FileOffer[] = fileHistory.map(item => ({
+            transferId: item.transferId,
+            senderId: item.senderId,
+            senderHostname: item.senderHostname,
+            senderNick: item.senderNick,
+            senderIp: item.senderIp,
+            targetId: item.targetHostname || '',
+            targetHostname: item.targetHostname,
+            fileName: item.fileName,
+            fileSize: item.fileSize,
+            savePath: item.savePath,
+            timestamp: item.timestamp,
+          }));
+
+          setFileOffers(prev => {
+            const existingIds = new Set(prev.map(o => o.transferId));
+            const itemsToAdd = loadedOffers.filter(o => !existingIds.has(o.transferId));
+            return [...prev, ...itemsToAdd];
+          });
+
+          fileHistory.forEach(item => {
+            if (item.status) {
+              setFileProgresses(prev => ({
+                ...prev,
+                [item.transferId]: {
+                  transferId: item.transferId,
+                  status: item.status,
+                  progress: item.status === 'completed' ? 100 : 0,
+                  savePath: item.savePath,
+                }
+              }));
+            }
+          });
+        }
+
+        if (msgCount >= 100 || fileCount >= 100) {
+          setHasMoreHistory(true);
+        }
+      })
+      .catch(err => {
+        console.warn("Failed to load initial history from DB:", err);
+      });
+  }, [selectedTargetHostname, selectedTargetId]);
+
+  const handleLoadOlderMessages = () => {
+    if (isLoadingOlder || !hasMoreHistory) return;
+    setIsLoadingOlder(true);
+
+    const earliestMsg = messages.length > 0 ? Math.min(...messages.map(m => m.timestamp)) : 0;
+    const earliestFile = fileOffers.length > 0 ? Math.min(...fileOffers.map(o => o.timestamp)) : 0;
+
+    let beforeTimestamp = 0;
+    if (earliestMsg > 0 && earliestFile > 0) {
+      beforeTimestamp = Math.min(earliestMsg, earliestFile);
+    } else if (earliestMsg > 0) {
+      beforeTimestamp = earliestMsg;
+    } else {
+      beforeTimestamp = earliestFile;
+    }
+
+    if (beforeTimestamp <= 0) {
+      setIsLoadingOlder(false);
+      setHasMoreHistory(false);
+      return;
+    }
+
+    Promise.all([
+      GetMessageHistory(selectedTargetHostname, selectedTargetId, beforeTimestamp, 100),
+      GetFileOffersHistory(selectedTargetHostname, selectedTargetId, beforeTimestamp, 100),
+    ])
+      .then(([olderMsgs, olderFiles]: [any[], any[]]) => {
+        let msgCount = 0;
+        let fileCount = 0;
+
+        if (Array.isArray(olderMsgs)) {
+          msgCount = olderMsgs.length;
+          const formattedOlder: ChatMessage[] = olderMsgs.map(item => ({
+            id: item.id,
+            senderId: item.senderId,
+            senderHostname: item.senderHostname,
+            senderNick: item.senderNick,
+            senderIp: item.senderIp,
+            targetId: item.targetHostname ? item.targetHostname : '',
+            targetHostname: item.targetHostname,
+            content: item.content,
+            timestamp: item.timestamp,
+          }));
+
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const newItems = formattedOlder.filter(m => !existingIds.has(m.id));
+            return [...newItems, ...prev].sort((a, b) => a.timestamp - b.timestamp);
+          });
+        }
+
+        if (Array.isArray(olderFiles)) {
+          fileCount = olderFiles.length;
+          const loadedOffers: FileOffer[] = olderFiles.map(item => ({
+            transferId: item.transferId,
+            senderId: item.senderId,
+            senderHostname: item.senderHostname,
+            senderNick: item.senderNick,
+            senderIp: item.senderIp,
+            targetId: item.targetHostname || '',
+            targetHostname: item.targetHostname,
+            fileName: item.fileName,
+            fileSize: item.fileSize,
+            savePath: item.savePath,
+            timestamp: item.timestamp,
+          }));
+
+          setFileOffers(prev => {
+            const existingIds = new Set(prev.map(o => o.transferId));
+            const itemsToAdd = loadedOffers.filter(o => !existingIds.has(o.transferId));
+            return [...itemsToAdd, ...prev];
+          });
+
+          olderFiles.forEach(item => {
+            if (item.status) {
+              setFileProgresses(prev => ({
+                ...prev,
+                [item.transferId]: {
+                  transferId: item.transferId,
+                  status: item.status,
+                  progress: item.status === 'completed' ? 100 : 0,
+                  savePath: item.savePath,
+                }
+              }));
+            }
+          });
+        }
+
+        if (msgCount < 100 && fileCount < 100) {
+          setHasMoreHistory(false);
+        }
+      })
+      .catch(err => {
+        console.warn("Failed to load older history batch:", err);
+      })
+      .finally(() => {
+        setIsLoadingOlder(false);
+      });
+  };
 
   // Fetch initial connection state from Go Wails backend
   useEffect(() => {
@@ -136,12 +328,12 @@ export function App() {
 
       const currentMyPeer = myPeerRef.current;
       const isFromOtherUser = Boolean(chatMsg.senderId && chatMsg.senderId !== currentMyPeer.id);
-      const chatKey = chatMsg.targetId === '' ? '' : chatMsg.senderId;
+      const chatKey = chatMsg.targetHostname ? (chatMsg.senderHostname === currentMyPeer.hostname ? chatMsg.targetHostname : chatMsg.senderHostname) : (chatMsg.targetId === '' ? '' : chatMsg.senderId);
 
       // Track last message per target conversation
       setLastMessages(prev => ({
         ...prev,
-        [chatKey]: {
+        [chatKey || '']: {
           content: chatMsg.content,
           timestamp: chatMsg.timestamp,
           senderNick: chatMsg.senderNick,
@@ -149,12 +341,12 @@ export function App() {
       }));
 
       if (isFromOtherUser) {
-        const isCurrentChat = selectedTargetIdRef.current === chatKey;
+        const isCurrentChat = selectedTargetHostnameRef.current === chatKey || selectedTargetIdRef.current === chatKey;
 
         if (!isCurrentChat) {
           setUnreadCounts(prev => ({
             ...prev,
-            [chatKey]: (prev[chatKey] || 0) + 1,
+            [chatKey || '']: (prev[chatKey || ''] || 0) + 1,
           }));
           playPrivateMessageAlert();
         }
@@ -237,18 +429,21 @@ export function App() {
   }, []);
 
   // Handlers
-  const handleSelectTarget = (targetId: string) => {
+  const handleSelectTarget = (targetId: string, targetHostname?: string) => {
     setSelectedTargetId(targetId);
+    setSelectedTargetHostname(targetHostname || '');
+    const key = targetHostname || targetId;
     setUnreadCounts(prev => {
-      if (!prev[targetId]) return prev;
+      if (!prev[key] && !prev[targetId]) return prev;
       const next = { ...prev };
+      delete next[key];
       delete next[targetId];
       return next;
     });
   };
 
   const handleSendMessage = (content: string) => {
-    SendChatMessage(selectedTargetId, content).catch(err => {
+    SendChatMessage(selectedTargetId, selectedTargetHostname, content).catch(err => {
       console.error("Failed to send message:", err);
     });
   };
@@ -278,7 +473,15 @@ export function App() {
     });
   };
 
-  const targetPeer = peers.find(p => p.id === selectedTargetId);
+  const targetPeer = peers.find(p => p.id === selectedTargetId || (selectedTargetHostname && p.hostname === selectedTargetHostname));
+
+  const handleOpenFile = (filePath: string) => {
+    if (filePath) {
+      OpenFile(filePath).catch(err => {
+        console.warn("Failed to open file:", err);
+      });
+    }
+  };
 
   return (
     <div className="w-screen h-screen flex bg-slate-950 text-slate-100 overflow-hidden font-sans">
@@ -288,7 +491,7 @@ export function App() {
         isHost={isHost}
         serverAddr={serverAddr}
         peers={peers}
-        selectedTargetId={selectedTargetId}
+        selectedTargetId={selectedTargetHostname || selectedTargetId}
         unreadCounts={unreadCounts}
         lastMessages={lastMessages}
         onSelectTarget={handleSelectTarget}
@@ -298,7 +501,7 @@ export function App() {
       {/* Main Chat Area */}
       <ChatArea
         myPeer={myPeer}
-        selectedTargetId={selectedTargetId}
+        selectedTargetId={selectedTargetHostname || selectedTargetId}
         targetPeer={targetPeer}
         messages={messages}
         fileOffers={fileOffers}
@@ -309,6 +512,10 @@ export function App() {
         onSendPing={() => handleSendPing(selectedTargetId)}
         onAcceptFile={handleAcceptFile}
         onRejectFile={handleRejectFile}
+        onOpenFile={handleOpenFile}
+        onLoadOlder={handleLoadOlderMessages}
+        hasMoreHistory={hasMoreHistory}
+        isLoadingOlder={isLoadingOlder}
       />
 
       {/* Floating Ping Alert Toast */}

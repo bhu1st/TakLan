@@ -8,6 +8,7 @@ interface FileCardProps {
   isMe: boolean;
   onAccept?: (transferId: string) => void;
   onReject?: (transferId: string) => void;
+  onOpenFile?: (savePath: string) => void;
 }
 
 export const FileCard: React.FC<FileCardProps> = ({
@@ -16,6 +17,7 @@ export const FileCard: React.FC<FileCardProps> = ({
   isMe,
   onAccept,
   onReject,
+  onOpenFile,
 }) => {
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -70,12 +72,17 @@ export const FileCard: React.FC<FileCardProps> = ({
       )}
 
       {status === 'completed' && (
-        <View style={styles.statusBadgeCompleted}>
-          <Text style={styles.statusCompletedText}>✓ Transfer Completed</Text>
-          {progress?.savePath ? (
-            <Text style={styles.savePathText} numberOfLines={1}>
-              Saved: {progress.savePath.includes('Download') ? 'Downloads' : 'Selected Folder'}
-            </Text>
+        <View style={styles.completedRow}>
+          <View style={styles.statusBadgeCompleted}>
+            <Text style={styles.statusCompletedText}>✓ Transfer Completed</Text>
+          </View>
+          {onOpenFile && progress?.savePath ? (
+            <TouchableOpacity
+              style={styles.openBtn}
+              onPress={() => onOpenFile(progress.savePath!)}
+            >
+              <Text style={styles.openBtnText}>Open File</Text>
+            </TouchableOpacity>
           ) : null}
         </View>
       )}
@@ -187,24 +194,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: 'monospace',
   },
-  statusBadgeCompleted: {
+  completedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: 6,
+    gap: 8,
+  },
+  statusBadgeCompleted: {
     paddingVertical: 4,
     paddingHorizontal: 8,
     backgroundColor: 'rgba(16, 185, 129, 0.2)',
     borderRadius: 6,
-    alignSelf: 'flex-start',
   },
   statusCompletedText: {
     color: '#34D399',
     fontSize: 11,
     fontWeight: 'bold',
   },
-  savePathText: {
-    color: '#6EE7B7',
-    fontSize: 10,
-    marginTop: 2,
-    fontFamily: 'monospace',
+  openBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: '#10B981',
+    borderRadius: 6,
+  },
+  openBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
   statusBadgeRejected: {
     marginTop: 6,

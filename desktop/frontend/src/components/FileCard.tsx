@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Download, XCircle, CheckCircle, HardDrive, AlertCircle, RefreshCw } from 'lucide-react';
+import { FileText, Download, CheckCircle, HardDrive, AlertCircle, RefreshCw, ExternalLink, FolderOpen } from 'lucide-react';
 import { FileOffer, FileProgress, Peer } from '../types';
 
 interface FileCardProps {
@@ -8,6 +8,7 @@ interface FileCardProps {
   myPeer: Peer;
   onAccept: (transferId: string) => void;
   onReject: (transferId: string) => void;
+  onOpenFile?: (filePath: string) => void;
 }
 
 export const FileCard: React.FC<FileCardProps> = ({
@@ -16,10 +17,12 @@ export const FileCard: React.FC<FileCardProps> = ({
   myPeer,
   onAccept,
   onReject,
+  onOpenFile,
 }) => {
-  const isSender = offer.senderId === myPeer.id;
+  const isSender = offer.senderId === myPeer.id || (Boolean(offer.senderHostname) && offer.senderHostname === myPeer.hostname);
   const status = progress?.status || 'offered';
   const percentage = Math.round(progress?.progress || 0);
+  const filePath = progress?.savePath || offer.savePath || '';
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -28,10 +31,15 @@ export const FileCard: React.FC<FileCardProps> = ({
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
 
+  const isValidLocalPath = Boolean(filePath) && !filePath.startsWith('content://');
+
   return (
-    <div className="my-2 p-3.5 rounded-xl glass-card border border-indigo-500/20 max-w-md shadow-lg transition-all duration-200 hover:border-indigo-500/40">
+    <div className="my-2 p-3.5 rounded-xl glass-card border border-indigo-500/20 max-w-md shadow-lg transition-all duration-200 hover:border-indigo-500/40 select-none">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
+      <div
+        className={`flex items-start justify-between gap-3 ${isValidLocalPath ? 'cursor-pointer hover:opacity-90' : ''}`}
+        onClick={() => isValidLocalPath && onOpenFile?.(filePath)}
+      >
         <div className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
           <FileText className="w-6 h-6" />
         </div>
@@ -41,7 +49,7 @@ export const FileCard: React.FC<FileCardProps> = ({
             <h4 className="text-sm font-semibold text-slate-100 truncate" title={offer.fileName}>
               {offer.fileName}
             </h4>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 shrink-0">
               {formatSize(offer.fileSize)}
             </span>
           </div>
@@ -103,15 +111,30 @@ export const FileCard: React.FC<FileCardProps> = ({
         )}
 
         {status === 'completed' && (
-          <div className="flex items-center justify-between text-xs text-emerald-400 font-medium">
-            <span className="flex items-center gap-1.5">
-              <CheckCircle className="w-4 h-4 text-emerald-400" />
-              Transfer Complete
-            </span>
-            {progress?.savePath && (
-              <span className="text-[11px] font-mono text-slate-400 truncate max-w-[200px]" title={progress.savePath}>
-                {progress.savePath}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-emerald-400 font-medium">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                Transfer Complete
               </span>
+            </div>
+
+            {isValidLocalPath && (
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                <div className="text-[11px] font-mono text-slate-400 truncate flex-1" title={filePath}>
+                  {filePath}
+                </div>
+                {onOpenFile && (
+                  <button
+                    onClick={() => onOpenFile(filePath)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-colors shrink-0"
+                    title="Open file"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Open File
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}

@@ -6,12 +6,24 @@ export function AcceptFileTransfer(arg1) {
   return window['go']['main']['App']['AcceptFileTransfer'](arg1);
 }
 
+export function GetFileOffersHistory(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetFileOffersHistory'](arg1, arg2, arg3, arg4);
+}
+
 export function GetInitialState() {
   return window['go']['main']['App']['GetInitialState']();
 }
 
+export function GetMessageHistory(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetMessageHistory'](arg1, arg2, arg3, arg4);
+}
+
 export function MinimizeToTray() {
   return window['go']['main']['App']['MinimizeToTray']();
+}
+
+export function OpenFile(arg1) {
+  return window['go']['main']['App']['OpenFile'](arg1);
 }
 
 export function RejectFileTransfer(arg1) {
@@ -22,8 +34,8 @@ export function SelectAndSendFile(arg1) {
   return window['go']['main']['App']['SelectAndSendFile'](arg1);
 }
 
-export function SendChatMessage(arg1, arg2) {
-  return window['go']['main']['App']['SendChatMessage'](arg1, arg2);
+export function SendChatMessage(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SendChatMessage'](arg1, arg2, arg3);
 }
 
 export function SendPing(arg1) {
