@@ -394,12 +394,21 @@ func (s *Server) sendToClient(client *ClientConn, packet Packet) error {
 }
 
 func (s *Server) sendToPeerID(peerID string, packet Packet) {
+	if peerID == "" {
+		return
+	}
 	s.mu.RLock()
-	client, ok := s.clients[peerID]
-	s.mu.RUnlock()
+	defer s.mu.RUnlock()
 
-	if ok && client != nil {
+	if client, ok := s.clients[peerID]; ok && client != nil {
 		s.sendToClient(client, packet)
+		return
+	}
+
+	for _, client := range s.clients {
+		if client != nil && (client.ID == peerID || client.Peer.Hostname == peerID) {
+			s.sendToClient(client, packet)
+		}
 	}
 }
 

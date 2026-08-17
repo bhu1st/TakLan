@@ -65,11 +65,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   // 1. Add Chat Messages
   messages.forEach(msg => {
-    if (isPublic && msg.targetId === '') {
+    if (isPublic && (!msg.targetId || msg.targetId === '' || msg.targetId === 'general')) {
       timelineItems.push({ id: msg.id, type: 'chat', timestamp: msg.timestamp, chat: msg });
-    } else if (!isPublic && targetPeer && (
-      (msg.senderId === myPeer.id && (msg.targetId === selectedTargetId || msg.targetHostname === targetPeer.hostname)) ||
-      ((msg.senderId === selectedTargetId || msg.senderHostname === targetPeer.hostname) && (msg.targetId === myPeer.id || msg.targetHostname === myPeer.hostname))
+    } else if (!isPublic && (
+      // Sent by me to target
+      ((msg.senderId === myPeer.id || (Boolean(myPeer.hostname) && msg.senderHostname === myPeer.hostname)) &&
+        (msg.targetId === selectedTargetId || (Boolean(targetPeer?.hostname) && msg.targetHostname === targetPeer?.hostname) || (Boolean(msg.targetHostname) && msg.targetHostname === selectedTargetId))) ||
+      // Received from target to me
+      ((msg.senderId === selectedTargetId || (Boolean(targetPeer?.hostname) && msg.senderHostname === targetPeer?.hostname) || (Boolean(msg.senderHostname) && msg.senderHostname === selectedTargetId)) &&
+        (msg.targetId === myPeer.id || (Boolean(myPeer.hostname) && msg.targetHostname === myPeer.hostname) || !msg.targetId || msg.targetId === ''))
     )) {
       timelineItems.push({ id: msg.id, type: 'chat', timestamp: msg.timestamp, chat: msg });
     }
@@ -80,13 +84,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     const isOfferPublic = !offer.targetId || offer.targetId === '' || offer.targetId === 'general';
     if (isPublic && isOfferPublic) {
       timelineItems.push({ id: offer.transferId, type: 'file', timestamp: offer.timestamp, fileOffer: offer });
-    } else if (!isPublic && targetPeer && (
+    } else if (!isPublic && (
       // Sent by me to target peer
-      ((offer.senderId === myPeer.id || offer.senderHostname === myPeer.hostname) &&
-        (offer.targetId === selectedTargetId || offer.targetHostname === targetPeer.hostname || offer.targetId === targetPeer.id)) ||
+      ((offer.senderId === myPeer.id || (Boolean(myPeer.hostname) && offer.senderHostname === myPeer.hostname)) &&
+        (offer.targetId === selectedTargetId || (Boolean(targetPeer?.hostname) && offer.targetHostname === targetPeer?.hostname) || (Boolean(offer.targetHostname) && offer.targetHostname === selectedTargetId))) ||
       // Received from target peer to me
-      ((offer.senderId === selectedTargetId || offer.senderHostname === targetPeer.hostname || offer.senderId === targetPeer.id) &&
-        (offer.targetId === myPeer.id || offer.targetHostname === myPeer.hostname || !offer.targetId))
+      ((offer.senderId === selectedTargetId || (Boolean(targetPeer?.hostname) && offer.senderHostname === targetPeer?.hostname) || (Boolean(offer.senderHostname) && offer.senderHostname === selectedTargetId)) &&
+        (offer.targetId === myPeer.id || (Boolean(myPeer.hostname) && offer.targetHostname === myPeer.hostname) || !offer.targetId || offer.targetId === ''))
     )) {
       timelineItems.push({ id: offer.transferId, type: 'file', timestamp: offer.timestamp, fileOffer: offer });
     }
@@ -301,6 +305,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                     myPeer={myPeer}
                     onAccept={onAcceptFile}
                     onReject={onRejectFile}
+                    onOpenFile={onOpenFile}
                   />
                 </div>
               );

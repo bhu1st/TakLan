@@ -20,9 +20,9 @@ export const FileCard: React.FC<FileCardProps> = ({
   onOpenFile,
 }) => {
   const isSender = offer.senderId === myPeer.id || (Boolean(offer.senderHostname) && offer.senderHostname === myPeer.hostname);
-  const status = progress?.status || 'offered';
+  const status = progress?.status || (offer as any).status || 'offered';
   const percentage = Math.round(progress?.progress || 0);
-  const filePath = progress?.savePath || offer.savePath || '';
+  const filePath = progress?.savePath || offer.savePath || offer.fileName || '';
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;

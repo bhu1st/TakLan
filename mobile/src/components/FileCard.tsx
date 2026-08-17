@@ -25,8 +25,9 @@ export const FileCard: React.FC<FileCardProps> = ({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const status = progress?.status || 'pending';
+  const status = progress?.status || (offer as any).status || 'pending';
   const pct = Math.round(progress?.progress || 0);
+  const targetSavePath = progress?.savePath || offer.savePath || offer.fileName;
 
   return (
     <View style={[styles.card, isMe ? styles.myCard : styles.peerCard]}>
@@ -76,10 +77,10 @@ export const FileCard: React.FC<FileCardProps> = ({
           <View style={styles.statusBadgeCompleted}>
             <Text style={styles.statusCompletedText}>✓ Transfer Completed</Text>
           </View>
-          {onOpenFile && progress?.savePath ? (
+          {onOpenFile && targetSavePath ? (
             <TouchableOpacity
               style={styles.openBtn}
-              onPress={() => onOpenFile(progress.savePath!)}
+              onPress={() => onOpenFile(targetSavePath)}
             >
               <Text style={styles.openBtnText}>Open File</Text>
             </TouchableOpacity>
