@@ -409,22 +409,33 @@ export function App() {
     });
 
     EventsOn('file-progress', (progress: FileProgress) => {
-      setFileProgresses(prev => ({
-        ...prev,
-        [progress.transferId]: progress,
-      }));
+      setFileProgresses(prev => {
+        const existing = prev[progress.transferId];
+        return {
+          ...prev,
+          [progress.transferId]: {
+            ...existing,
+            ...progress,
+            savePath: progress.savePath || existing?.savePath,
+          },
+        };
+      });
     });
 
     EventsOn('file-response', (resp: { transferId: string; accepted: boolean; savePath?: string }) => {
-      setFileProgresses(prev => ({
-        ...prev,
-        [resp.transferId]: {
-          transferId: resp.transferId,
-          status: resp.accepted ? 'transferring' : 'rejected',
-          progress: resp.accepted ? 0 : 0,
-          savePath: resp.savePath,
-        },
-      }));
+      setFileProgresses(prev => {
+        const existing = prev[resp.transferId];
+        return {
+          ...prev,
+          [resp.transferId]: {
+            ...existing,
+            transferId: resp.transferId,
+            status: resp.accepted ? 'transferring' : 'rejected',
+            progress: existing?.progress || 0,
+            savePath: resp.savePath || existing?.savePath,
+          },
+        };
+      });
     });
   }, []);
 

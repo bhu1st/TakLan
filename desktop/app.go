@@ -389,14 +389,20 @@ func (a *App) onPacketReceived(packet network.Packet) {
 				statusStr = "completed"
 			}
 
+			savePath := ""
+			if t := a.fileMgr.GetTransfer(chunk.TransferID); t != nil {
+				savePath = t.SavePath
+			}
+
 			if a.database != nil {
-				_ = a.database.UpdateFileStatus(chunk.TransferID, statusStr, "")
+				_ = a.database.UpdateFileStatus(chunk.TransferID, statusStr, savePath)
 			}
 
 			statusPayload := network.FileStatusPayload{
 				TransferID: chunk.TransferID,
 				Status:     statusStr,
 				Progress:   progress,
+				SavePath:   savePath,
 				Error:      errStr,
 			}
 			wailsRuntime.EventsEmit(a.ctx, "file-progress", statusPayload)
@@ -612,6 +618,13 @@ func (a *App) AcceptFileTransfer(transferID string) error {
 	if a.database != nil {
 		_ = a.database.UpdateFileStatus(transferID, "transferring", savePath)
 	}
+
+	wailsRuntime.EventsEmit(a.ctx, "file-progress", network.FileStatusPayload{
+		TransferID: transferID,
+		Status:     "transferring",
+		Progress:   0,
+		SavePath:   savePath,
+	})
 
 	respPayload, _ := network.MarshalPayload(network.FileResponsePayload{
 		TransferID:  transferID,

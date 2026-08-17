@@ -31,7 +31,8 @@ export const FileCard: React.FC<FileCardProps> = ({
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
 
-  const isValidLocalPath = Boolean(filePath) && !filePath.startsWith('content://');
+  const effectivePath = filePath || offer.fileName || '';
+  const isValidLocalPath = Boolean(effectivePath) && !effectivePath.startsWith('content://');
 
   return (
     <div className="my-2 p-3.5 rounded-xl glass-card border border-indigo-500/20 max-w-md shadow-lg transition-all duration-200 hover:border-indigo-500/40 select-none">
@@ -121,16 +122,16 @@ export const FileCard: React.FC<FileCardProps> = ({
 
             {isValidLocalPath && (
               <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
-                <div className="text-[11px] font-mono text-slate-400 truncate flex-1" title={filePath}>
-                  {filePath}
+                <div className="text-[11px] font-mono text-slate-400 truncate flex-1" title={effectivePath}>
+                  {effectivePath}
                 </div>
                 {onOpenFile && (
                   <button
-                    onClick={() => onOpenFile(filePath)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-colors shrink-0"
+                    onClick={() => onOpenFile(effectivePath)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-colors shrink-0 cursor-pointer"
                     title="Open file"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />
+                    <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
                     Open File
                   </button>
                 )}

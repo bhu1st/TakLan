@@ -116,6 +116,7 @@ type FileStatusPayload struct {
 	TransferID string  `json:"transferId"`
 	Status     string  `json:"status"`   // "transferring", "completed", "rejected", "failed"
 	Progress   float64 `json:"progress"` // 0 to 100
+	SavePath   string  `json:"savePath,omitempty"`
 	Error      string  `json:"error,omitempty"`
 }
 
