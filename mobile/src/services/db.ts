@@ -133,12 +133,14 @@ class DatabaseService {
 
   /**
    * Retrieves up to `limit` messages for a conversation, before a given timestamp cursor.
-   * For the General channel pass peerId = '' and myId = ''.
+   * For the General channel pass targetId = '' and targetHostname = ''.
    * Returns messages in ascending timestamp order (oldest → newest).
    */
   async getMessages(
-    peerId: string,
+    targetId: string,
+    targetHostname: string,
     myId: string,
+    myHostname: string,
     beforeTimestamp?: number,
     limit: number = 100,
   ): Promise<ChatMessage[]> {
@@ -147,23 +149,41 @@ class DatabaseService {
       const before = beforeTimestamp ?? Date.now() + 1;
       let rows: any[];
 
-      if (peerId === '') {
+      if (!targetId && !targetHostname) {
         rows = await this.db.getAllAsync(
           `SELECT * FROM messages
-           WHERE target_id = '' AND timestamp < ?
+           WHERE (target_id = '' OR target_id = 'general' OR target_hostname = '' OR target_hostname = 'general')
+             AND timestamp < ?
            ORDER BY timestamp DESC LIMIT ?`,
           before, limit,
         );
       } else {
+        const tId = targetId || '';
+        const tHost = targetHostname || targetId || '';
+        const mId = myId || '';
+        const mHost = myHostname || myId || '';
+
         rows = await this.db.getAllAsync(
           `SELECT * FROM messages
            WHERE timestamp < ?
              AND (
-               (sender_id = ? AND target_id = ?) OR
-               (sender_id = ? AND target_id = ?)
+               (
+                 (sender_id = ? OR (sender_hostname != '' AND sender_hostname = ?))
+                 AND (target_id = ? OR target_id = ? OR (target_hostname != '' AND (target_hostname = ? OR target_hostname = ?)))
+               )
+               OR
+               (
+                 (sender_id = ? OR sender_id = ? OR (sender_hostname != '' AND (sender_hostname = ? OR sender_hostname = ?)))
+                 AND (target_id = ? OR target_id = '' OR (target_hostname != '' AND target_hostname = ?))
+               )
              )
            ORDER BY timestamp DESC LIMIT ?`,
-          before, myId, peerId, peerId, myId, limit,
+          before,
+          mId, mHost,
+          tId, tHost, tId, tHost,
+          tId, tHost, tId, tHost,
+          mId, mHost,
+          limit,
         );
       }
 
@@ -189,8 +209,10 @@ class DatabaseService {
    * Returns items in ascending timestamp order (oldest → newest).
    */
   async getFileOffers(
-    peerId: string,
+    targetId: string,
+    targetHostname: string,
     myId: string,
+    myHostname: string,
     beforeTimestamp?: number,
     limit: number = 100,
   ): Promise<FileOffer[]> {
@@ -199,23 +221,41 @@ class DatabaseService {
       const before = beforeTimestamp ?? Date.now() + 1;
       let rows: any[];
 
-      if (peerId === '') {
+      if (!targetId && !targetHostname) {
         rows = await this.db.getAllAsync(
           `SELECT * FROM file_transfers
-           WHERE target_id = '' AND timestamp < ?
+           WHERE (target_id = '' OR target_id = 'general' OR target_hostname = '' OR target_hostname = 'general')
+             AND timestamp < ?
            ORDER BY timestamp DESC LIMIT ?`,
           before, limit,
         );
       } else {
+        const tId = targetId || '';
+        const tHost = targetHostname || targetId || '';
+        const mId = myId || '';
+        const mHost = myHostname || myId || '';
+
         rows = await this.db.getAllAsync(
           `SELECT * FROM file_transfers
            WHERE timestamp < ?
              AND (
-               (sender_id = ? AND target_id = ?) OR
-               (sender_id = ? AND target_id = ?)
+               (
+                 (sender_id = ? OR (sender_hostname != '' AND sender_hostname = ?))
+                 AND (target_id = ? OR target_id = ? OR (target_hostname != '' AND (target_hostname = ? OR target_hostname = ?)))
+               )
+               OR
+               (
+                 (sender_id = ? OR sender_id = ? OR (sender_hostname != '' AND (sender_hostname = ? OR sender_hostname = ?)))
+                 AND (target_id = ? OR target_id = '' OR (target_hostname != '' AND target_hostname = ?))
+               )
              )
            ORDER BY timestamp DESC LIMIT ?`,
-          before, myId, peerId, peerId, myId, limit,
+          before,
+          mId, mHost,
+          tId, tHost, tId, tHost,
+          tId, tHost, tId, tHost,
+          mId, mHost,
+          limit,
         );
       }
 

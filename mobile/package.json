@@ -1,7 +1,7 @@
 {
   "name": "taklan",
   "main": "expo-router/entry",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "dependencies": {
     "@expo/metro-config": "~54.0.14",
     "expo": "~54.0.0",

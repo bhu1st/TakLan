@@ -343,12 +343,14 @@ export function App() {
       if (isFromOtherUser) {
         const isCurrentChat = selectedTargetHostnameRef.current === chatKey || selectedTargetIdRef.current === chatKey;
 
+        // Play audio chime for any incoming message from another peer
+        playPrivateMessageAlert();
+
         if (!isCurrentChat) {
           setUnreadCounts(prev => ({
             ...prev,
             [chatKey || '']: (prev[chatKey || ''] || 0) + 1,
           }));
-          playPrivateMessageAlert();
         }
 
         let isMinimised = false;

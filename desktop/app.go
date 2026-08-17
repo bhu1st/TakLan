@@ -289,6 +289,12 @@ func (a *App) onPacketReceived(packet network.Packet) {
 					Timestamp:      chat.Timestamp,
 				})
 			}
+			// If message is from another peer, restore/unminimise window to foreground
+			if chat.SenderID != a.myPeer.ID && chat.SenderHostname != a.myPeer.Hostname {
+				wailsRuntime.WindowUnminimise(a.ctx)
+				wailsRuntime.WindowShow(a.ctx)
+			}
+
 			wailsRuntime.EventsEmit(a.ctx, "new-message", chat)
 		}
 
@@ -326,6 +332,10 @@ func (a *App) onPacketReceived(packet network.Packet) {
 					SavePath:       "",
 					Timestamp:      offer.Timestamp,
 				})
+			}
+			if offer.SenderID != a.myPeer.ID && offer.SenderHostname != a.myPeer.Hostname {
+				wailsRuntime.WindowUnminimise(a.ctx)
+				wailsRuntime.WindowShow(a.ctx)
 			}
 			wailsRuntime.EventsEmit(a.ctx, "file-offer", offer)
 		}

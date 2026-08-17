@@ -661,23 +661,6 @@ class NetworkService {
     }
   }
 
-  /** Retrieve paginated chat history for a conversation from local SQLite DB */
-  public async getMessageHistory(
-    peerId: string,
-    beforeTimestamp?: number,
-    limit: number = 100,
-  ): Promise<ChatMessage[]> {
-    return db.getMessages(peerId, this.myPeer.id, beforeTimestamp, limit);
-  }
-
-  /** Retrieve paginated file offer history for a conversation from local SQLite DB */
-  public async getFileHistory(
-    peerId: string,
-    beforeTimestamp?: number,
-    limit: number = 100,
-  ): Promise<FileOffer[]> {
-    return db.getFileOffers(peerId, this.myPeer.id, beforeTimestamp, limit);
-  }
 
   public async openFile(filePath: string) {
     if (!filePath) return;
@@ -691,6 +674,28 @@ class NetworkService {
     } catch (err) {
       console.warn('[Android Network] Failed to open file:', err);
     }
+  }
+
+  public async getMessageHistory(
+    targetId: string,
+    targetHostname?: string,
+    beforeTimestamp?: number,
+    limit: number = 100,
+  ): Promise<ChatMessage[]> {
+    const targetPeer = this.currentPeers.find(p => p.id === targetId || p.hostname === targetId);
+    const resolvedHostname = targetHostname || targetPeer?.hostname || (targetId !== this.myPeer.id ? targetId : '');
+    return db.getMessages(targetId, resolvedHostname, this.myPeer.id, this.myPeer.hostname, beforeTimestamp, limit);
+  }
+
+  public async getFileHistory(
+    targetId: string,
+    targetHostname?: string,
+    beforeTimestamp?: number,
+    limit: number = 100,
+  ): Promise<FileOffer[]> {
+    const targetPeer = this.currentPeers.find(p => p.id === targetId || p.hostname === targetId);
+    const resolvedHostname = targetHostname || targetPeer?.hostname || (targetId !== this.myPeer.id ? targetId : '');
+    return db.getFileOffers(targetId, resolvedHostname, this.myPeer.id, this.myPeer.hostname, beforeTimestamp, limit);
   }
 
   public on(event: string, fn: EventListener) {

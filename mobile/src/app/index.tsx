@@ -83,9 +83,10 @@ export default function AppScreen() {
     setHasMoreHistory(false);
 
     const loadInitialHistory = async () => {
+      const targetPeer = peers.find((p) => p.id === selectedTargetId || p.hostname === selectedTargetId);
       const [msgs, offers] = await Promise.all([
-        networkService.getMessageHistory(selectedTargetId),
-        networkService.getFileHistory(selectedTargetId),
+        networkService.getMessageHistory(selectedTargetId, targetPeer?.hostname),
+        networkService.getFileHistory(selectedTargetId, targetPeer?.hostname),
       ]);
       setHistoryMessages(msgs);
       setHistoryOffers(offers);
@@ -99,15 +100,16 @@ export default function AppScreen() {
       }
     };
     loadInitialHistory();
-  }, [selectedTargetId]);
+  }, [selectedTargetId, peers]);
 
   const handleLoadOlderMessages = useCallback(async () => {
     if (isLoadingOlder || !hasMoreHistory) return;
     setIsLoadingOlder(true);
     const before = oldestTimestampRef.current;
+    const targetPeer = peers.find((p) => p.id === selectedTargetId || p.hostname === selectedTargetId);
     const [msgs, offers] = await Promise.all([
-      networkService.getMessageHistory(selectedTargetId, before),
-      networkService.getFileHistory(selectedTargetId, before),
+      networkService.getMessageHistory(selectedTargetId, targetPeer?.hostname, before),
+      networkService.getFileHistory(selectedTargetId, targetPeer?.hostname, before),
     ]);
     if (msgs.length > 0 || offers.length > 0) {
       const allTs = [
@@ -128,7 +130,7 @@ export default function AppScreen() {
       setHasMoreHistory(false);
     }
     setIsLoadingOlder(false);
-  }, [isLoadingOlder, hasMoreHistory, selectedTargetId]);
+  }, [isLoadingOlder, hasMoreHistory, selectedTargetId, peers]);
 
 
   useEffect(() => {
@@ -205,25 +207,29 @@ export default function AppScreen() {
     };
   }, []);
 
-  const activePeers = peers.filter((p) => p.id !== myPeer.id);
+  const activePeers = peers.filter((p) => p.id !== myPeer.id && p.hostname !== myPeer.hostname);
 
   // Filter messages for active channel/DM
   const isPublic = selectedTargetId === '';
+  const targetPeer = peers.find((p) => p.id === selectedTargetId || p.hostname === selectedTargetId);
+  const targetHostname = targetPeer?.hostname || (selectedTargetId !== myPeer.id ? selectedTargetId : '');
+
   const filteredMessages = messages.filter((msg) => {
-    if (isPublic && msg.targetId === '') return true;
-    if (
-      !isPublic &&
-      ((msg.senderId === myPeer.id && msg.targetId === selectedTargetId) ||
-        (msg.senderId === selectedTargetId && msg.targetId === myPeer.id))
-    ) {
-      return true;
+    if (isPublic) {
+      return msg.targetId === '' || msg.targetId === 'general' || msg.targetHostname === '' || msg.targetHostname === 'general';
     }
-    return false;
+    const isMeSender = msg.senderId === myPeer.id || (Boolean(myPeer.hostname) && msg.senderHostname === myPeer.hostname);
+    const isTargetRecipient = msg.targetId === selectedTargetId || (Boolean(targetHostname) && msg.targetHostname === targetHostname) || (Boolean(targetPeer) && msg.targetId === targetPeer!.id);
+
+    const isTargetSender = msg.senderId === selectedTargetId || (Boolean(targetHostname) && msg.senderHostname === targetHostname) || (Boolean(targetPeer) && msg.senderId === targetPeer!.id);
+    const isMeRecipient = msg.targetId === myPeer.id || (Boolean(myPeer.hostname) && msg.targetHostname === myPeer.hostname) || msg.targetId === '';
+
+    return (isMeSender && isTargetRecipient) || (isTargetSender && isMeRecipient);
   });
 
   const handleSendMessage = () => {
     if (!inputText.trim()) return;
-    networkService.sendChatMessage(selectedTargetId, inputText.trim());
+    networkService.sendChatMessage(selectedTargetId, inputText.trim(), targetHostname);
     setInputText('');
   };
 
@@ -232,7 +238,7 @@ export default function AppScreen() {
   };
 
   const handleSendFile = () => {
-    networkService.pickAndSendFile(selectedTargetId);
+    networkService.pickAndSendFile(selectedTargetId, targetHostname);
   };
 
   const handleConnectServer = (serverIp: string, port: number) => {
@@ -278,10 +284,14 @@ export default function AppScreen() {
 
   // 4. Live file offers
   fileOffers.forEach((offer) => {
-    const includePublic = isPublic && offer.targetId === '';
-    const includeDM = !isPublic &&
-      ((offer.senderId === myPeer.id && offer.targetId === selectedTargetId) ||
-       (offer.senderId === selectedTargetId && offer.targetId === myPeer.id));
+    const includePublic = isPublic && (offer.targetId === '' || offer.targetId === 'general' || offer.targetHostname === '' || offer.targetHostname === 'general');
+    const isMeSender = offer.senderId === myPeer.id || (Boolean(myPeer.hostname) && offer.senderHostname === myPeer.hostname);
+    const isTargetRecipient = offer.targetId === selectedTargetId || (Boolean(targetHostname) && offer.targetHostname === targetHostname) || (Boolean(targetPeer) && offer.targetId === targetPeer!.id);
+
+    const isTargetSender = offer.senderId === selectedTargetId || (Boolean(targetHostname) && offer.senderHostname === targetHostname) || (Boolean(targetPeer) && offer.senderId === targetPeer!.id);
+    const isMeRecipient = offer.targetId === myPeer.id || (Boolean(myPeer.hostname) && offer.targetHostname === myPeer.hostname) || offer.targetId === '';
+
+    const includeDM = !isPublic && ((isMeSender && isTargetRecipient) || (isTargetSender && isMeRecipient));
     if ((includePublic || includeDM) && !seenOfferIds.has(offer.transferId)) {
       seenOfferIds.add(offer.transferId);
       timelineItems.push({ id: offer.transferId, type: 'file', timestamp: offer.timestamp, fileOffer: offer });
@@ -289,8 +299,6 @@ export default function AppScreen() {
   });
 
   timelineItems.sort((a, b) => a.timestamp - b.timestamp);
-
-  const targetPeer = peers.find((p) => p.id === selectedTargetId);
   const generalUnread = unreadCounts[''] || 0;
 
   return (
