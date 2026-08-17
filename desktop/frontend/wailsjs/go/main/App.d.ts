@@ -6,6 +6,8 @@ export function AcceptFileTransfer(arg1:string):Promise<void>;
 
 export function GetInitialState():Promise<main.InitialState>;
 
+export function MinimizeToTray():Promise<void>;
+
 export function RejectFileTransfer(arg1:string):Promise<void>;
 
 export function SelectAndSendFile(arg1:string):Promise<string>;

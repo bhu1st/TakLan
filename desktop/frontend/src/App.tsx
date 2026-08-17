@@ -74,6 +74,27 @@ export function App() {
     };
   }, []);
 
+  // Listen for window minimize to hide to system tray
+  useEffect(() => {
+    const handleMinimizeCheck = async () => {
+      try {
+        if ((window as any).runtime && (window as any).runtime.WindowIsMinimised) {
+          const isMinimised = await (window as any).runtime.WindowIsMinimised();
+          if (isMinimised && (window as any).runtime.WindowHide) {
+            (window as any).runtime.WindowHide();
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    window.addEventListener('resize', handleMinimizeCheck);
+    return () => {
+      window.removeEventListener('resize', handleMinimizeCheck);
+    };
+  }, []);
+
   // Fetch initial connection state from Go Wails backend
   useEffect(() => {
     GetInitialState()

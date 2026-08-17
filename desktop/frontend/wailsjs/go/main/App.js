@@ -10,6 +10,10 @@ export function GetInitialState() {
   return window['go']['main']['App']['GetInitialState']();
 }
 
+export function MinimizeToTray() {
+  return window['go']['main']['App']['MinimizeToTray']();
+}
+
 export function RejectFileTransfer(arg1) {
   return window['go']['main']['App']['RejectFileTransfer'](arg1);
 }

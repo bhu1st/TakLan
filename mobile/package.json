@@ -1,7 +1,7 @@
 {
   "name": "lanmsngr-android",
   "main": "expo-router/entry",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "dependencies": {
     "@expo/metro-config": "~54.0.14",
     "expo": "~54.0.0",

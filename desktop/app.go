@@ -9,6 +9,7 @@ import (
 	"lanmsngr/pkg/filetransfer"
 	"lanmsngr/pkg/network"
 	"lanmsngr/pkg/sysinfo"
+	"lanmsngr/pkg/systray"
 
 	"github.com/google/uuid"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -24,6 +25,7 @@ type InitialState struct {
 // App struct
 type App struct {
 	ctx        context.Context
+	tray       *systray.Tray
 	server     *network.Server
 	client     *network.Client
 	fileMgr    *filetransfer.Manager
@@ -44,6 +46,13 @@ func NewApp() *App {
 // startup is called when the app starts. The context is saved
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	a.tray = systray.Start("LAN Msngr", func() {
+		wailsRuntime.WindowShow(a.ctx)
+		wailsRuntime.WindowUnminimise(a.ctx)
+	}, func() {
+		wailsRuntime.Quit(a.ctx)
+	})
 
 	localIP := sysinfo.GetLocalIP()
 	hostname := sysinfo.GetHostname()
@@ -111,12 +120,20 @@ func (a *App) startup(ctx context.Context) {
 
 // shutdown is called when the app closes
 func (a *App) shutdown(ctx context.Context) {
+	if a.tray != nil {
+		a.tray.Stop()
+	}
 	if a.client != nil {
 		a.client.Close()
 	}
 	if a.server != nil {
 		a.server.Stop()
 	}
+}
+
+// MinimizeToTray hides the application window to system tray
+func (a *App) MinimizeToTray() {
+	wailsRuntime.WindowHide(a.ctx)
 }
 
 // onPacketReceived handles network packets on client node
