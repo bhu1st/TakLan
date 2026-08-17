@@ -83,12 +83,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-9 h-9 rounded-xl overflow-hidden border border-indigo-500/30 shadow-md shadow-indigo-500/20 shrink-0 bg-slate-900 flex items-center justify-center">
-              <img src="/icon.png" alt="LAN Msngr Logo" className="w-full h-full object-cover" />
+              <img src="/icon.png" alt="TakLan Logo" className="w-full h-full object-cover" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <h1 className="font-bold text-slate-100 text-sm tracking-wide whitespace-nowrap">
-                  LAN Msngr
+                  TakLan
                 </h1>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-medium border border-indigo-500/30 shrink-0">
                   v{packageJson.version}

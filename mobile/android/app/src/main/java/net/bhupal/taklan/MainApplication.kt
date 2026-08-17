@@ -1,4 +1,4 @@
-package net.bhupal.lanmsngr
+package net.bhupal.taklan
 
 import android.app.Application
 import android.content.res.Configuration

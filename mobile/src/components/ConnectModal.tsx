@@ -43,7 +43,7 @@ export const ConnectModal: React.FC<ConnectModalProps> = ({
       <SafeAreaView style={styles.overlay}>
         <View style={styles.modalContent}>
           <Text style={styles.title}>Connect to LAN Host</Text>
-          <Text style={styles.subtitle}>Enter IPv4 address of Desktop LAN Msngr host</Text>
+          <Text style={styles.subtitle}>Enter IPv4 address of Desktop TakLan host</Text>
 
           <Text style={styles.label}>Host Server IP</Text>
           <TextInput

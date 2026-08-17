@@ -1,4 +1,4 @@
-module lanmsngr
+module taklan
 
 go 1.25.0
 

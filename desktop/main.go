@@ -30,7 +30,7 @@ func main() {
 		appVersion = "1.0.0"
 	}
 
-	windowTitle := fmt.Sprintf("LAN Msngr v%s", appVersion)
+	windowTitle := fmt.Sprintf("TakLan v%s", appVersion)
 
 	// Create an instance of the app structure
 	app := NewApp()

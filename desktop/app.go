@@ -9,11 +9,11 @@ import (
 	"runtime"
 	"time"
 
-	"lanmsngr/pkg/db"
-	"lanmsngr/pkg/filetransfer"
-	"lanmsngr/pkg/network"
-	"lanmsngr/pkg/sysinfo"
-	"lanmsngr/pkg/systray"
+	"taklan/pkg/db"
+	"taklan/pkg/filetransfer"
+	"taklan/pkg/network"
+	"taklan/pkg/sysinfo"
+	"taklan/pkg/systray"
 
 	"github.com/google/uuid"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"

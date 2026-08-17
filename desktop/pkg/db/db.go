@@ -60,7 +60,7 @@ func InitDB() (*Database, error) {
 		if err != nil || appDataDir == "" {
 			appDataDir = "."
 		}
-		dbDir = filepath.Join(appDataDir, "lanmsngr")
+		dbDir = filepath.Join(appDataDir, "taklan")
 	}
 
 	if err := os.MkdirAll(dbDir, 0755); err != nil {

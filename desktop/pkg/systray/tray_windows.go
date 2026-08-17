@@ -252,7 +252,7 @@ func Start(appName string, onShow func(), onExit func()) *Tray {
 		defer runtime.UnlockOSThread()
 
 		hInstance, _, _ := procGetModuleHandleW.Call(0)
-		className := "LANMsngrTrayClass"
+		className := "TakLanTrayClass"
 
 		wndClass := WNDCLASSEXW{
 			CbSize:        uint32(unsafe.Sizeof(WNDCLASSEXW{})),

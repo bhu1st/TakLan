@@ -11,7 +11,7 @@ import (
 const (
 	UDPDiscoveryPort = 25253
 	TCPDefaultPort   = 25252
-	BeaconMagic      = "LANMSNGR_BEACON_V1"
+	BeaconMagic      = "TAKLAN_BEACON_V1"
 )
 
 // DiscoveryBeacon broadcasts server availability on LAN

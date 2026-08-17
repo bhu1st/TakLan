@@ -1,4 +1,4 @@
-# PowerShell Release Build Script for LAN Msngr
+# PowerShell Release Build Script for TakLan
 # Dynamically reads version from wails.json and packages release build folder & zip archive.
 
 $ErrorActionPreference = "Stop"
@@ -29,10 +29,10 @@ if (-not (Test-Path $WailsJsonPath)) {
 $wailsConfig = Get-Content -Raw -Path $WailsJsonPath | ConvertFrom-Json
 $version = $wailsConfig.version
 $outputFilename = $wailsConfig.outputfilename
-if (-not $outputFilename) { $outputFilename = "lanmsngr" }
+if (-not $outputFilename) { $outputFilename = "TakLan" }
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host " Building LAN Msngr Release v$version " -ForegroundColor Green
+Write-Host " Building TakLan Release v$version " -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Cyan
 
 # 2. Run Wails Production Build inside desktop directory
@@ -54,7 +54,7 @@ Pop-Location
 
 # 3. Setup Target Release Directory Structure at Repo Root
 $ReleaseBaseDir = Join-Path $RepoRootDir "release"
-$FolderVersionName = "LanMsngr-win-v$version"
+$FolderVersionName = "TakLan-win-v$version"
 $TargetReleaseDir = Join-Path $ReleaseBaseDir $FolderVersionName
 $ZipArchivePath = Join-Path $ReleaseBaseDir "$FolderVersionName.zip"
 
@@ -108,15 +108,15 @@ if (Test-Path $ReadmeSource) {
     Write-Warning "README.md not found"
 }
 
-# lanmsngr.png banner image
-$BannerSource = Join-Path $DesktopDir "lanmsngr.png"
+# TakLan.png banner image
+$BannerSource = Join-Path $DesktopDir "TakLan.png"
 if (-not (Test-Path $BannerSource)) {
-    $BannerSource = Join-Path $RepoRootDir "lanmsngr.png"
+    $BannerSource = Join-Path $RepoRootDir "TakLan.png"
 }
 
 if (Test-Path $BannerSource) {
-    Copy-Item -Path $BannerSource -Destination (Join-Path $TargetReleaseDir "lanmsngr.png") -Force
-    Write-Host "  [+] lanmsngr.png (Banner)" -ForegroundColor Green
+    Copy-Item -Path $BannerSource -Destination (Join-Path $TargetReleaseDir "TakLan.png") -Force
+    Write-Host "  [+] TakLan.png (Banner)" -ForegroundColor Green
 }
 
 # 5. Create ZIP Archive for distribution

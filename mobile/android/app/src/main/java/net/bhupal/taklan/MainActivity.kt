@@ -1,4 +1,4 @@
-package net.bhupal.lanmsngr
+package net.bhupal.taklan
 
 import android.os.Build
 import android.os.Bundle

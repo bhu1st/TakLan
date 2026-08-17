@@ -200,7 +200,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               )}
             </h3>
             <p className="text-xs text-slate-400 font-mono mt-0.5">
-              {isPublic ? 'All LAN Msngr peers on local subnet' : `Host: ${targetPeer?.hostname || selectedTargetId} • IP: ${targetPeer?.ip || 'Offline'}`}
+              {isPublic ? 'All TakLan peers on local subnet' : `Host: ${targetPeer?.hostname || selectedTargetId} • IP: ${targetPeer?.ip || 'Offline'}`}
             </p>
           </div>
         </div>

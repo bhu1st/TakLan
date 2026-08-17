@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "LAN Msngr",
-    "slug": "lanmsngr",
-    "version": "1.1.0",
+    "name": "TakLan",
+    "slug": "taklan",
+    "version": "1.2.0",
     "icon": "./assets/images/icon.png",
     "orientation": "portrait",
-    "scheme": "lanmsngr",
+    "scheme": "taklan",
     "userInterfaceStyle": "dark",
     "sdkVersion": "54.0.0",
     "splash": {
@@ -14,7 +14,7 @@
       "backgroundColor": "#090D16"
     },
     "android": {
-      "package": "net.bhupal.lanmsngr",
+      "package": "net.bhupal.taklan",
       "usesCleartextTraffic": true,
       "permissions": [
         "INTERNET",
@@ -41,7 +41,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-system-ui"
+      "expo-system-ui",
+      "expo-sqlite"
     ]
   }
 }

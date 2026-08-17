@@ -72,9 +72,9 @@ export function App() {
 
   // Reset title on window focus
   useEffect(() => {
-    document.title = `LAN Msngr v${packageJson.version}`;
+    document.title = `TakLan v${packageJson.version}`;
     const handleFocus = () => {
-      document.title = `LAN Msngr v${packageJson.version}`;
+      document.title = `TakLan v${packageJson.version}`;
     };
     window.addEventListener('focus', handleFocus);
     return () => {
@@ -363,7 +363,7 @@ export function App() {
         const isBackgrounded = isMinimised || document.hidden || !document.hasFocus();
 
         if (isBackgrounded) {
-          document.title = `💬 (${chatMsg.senderNick}) LAN Msngr v${packageJson.version}`;
+          document.title = `💬 (${chatMsg.senderNick}) TakLan v${packageJson.version}`;
         }
       }
     });

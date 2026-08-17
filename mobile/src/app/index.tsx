@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
   ScrollView,
   StatusBar,
   Keyboard,
+  ActivityIndicator,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FileCard } from '@/components/FileCard';
@@ -44,6 +47,15 @@ export default function AppScreen() {
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [lastMessages, setLastMessages] = useState<Record<string, LastMessageInfo>>({});
 
+  // --- Pagination / History state ---
+  const [historyMessages, setHistoryMessages] = useState<ChatMessage[]>([]);
+  const [historyOffers, setHistoryOffers] = useState<FileOffer[]>([]);
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const oldestTimestampRef = useRef<number | undefined>(undefined);
+  const selectedTargetIdRef = useRef<string>('');
+  // ----------------------------------
+
   const [serverAddr, setServerAddr] = useState<string>(networkService.getServerAddr() || 'Offline');
   const [isConnected, setIsConnected] = useState<boolean>(networkService.getIsConnected());
   const [inputText, setInputText] = useState<string>('');
@@ -52,7 +64,7 @@ export default function AppScreen() {
   const [isConnectModalVisible, setIsConnectModalVisible] = useState<boolean>(false);
 
   const flatListRef = useRef<FlatList>(null);
-  const selectedTargetIdRef = useRef<string>(selectedTargetId);
+
 
   useEffect(() => {
     selectedTargetIdRef.current = selectedTargetId;
@@ -63,7 +75,61 @@ export default function AppScreen() {
       delete next[selectedTargetId];
       return next;
     });
+
+    // --- Load initial history from SQLite ---
+    oldestTimestampRef.current = undefined;
+    setHistoryMessages([]);
+    setHistoryOffers([]);
+    setHasMoreHistory(false);
+
+    const loadInitialHistory = async () => {
+      const [msgs, offers] = await Promise.all([
+        networkService.getMessageHistory(selectedTargetId),
+        networkService.getFileHistory(selectedTargetId),
+      ]);
+      setHistoryMessages(msgs);
+      setHistoryOffers(offers);
+      if (msgs.length > 0 || offers.length > 0) {
+        const allTs = [
+          ...(msgs.length > 0 ? [msgs[0].timestamp] : []),
+          ...(offers.length > 0 ? [offers[0].timestamp] : []),
+        ];
+        oldestTimestampRef.current = Math.min(...allTs);
+        setHasMoreHistory(msgs.length >= 100 || offers.length >= 100);
+      }
+    };
+    loadInitialHistory();
   }, [selectedTargetId]);
+
+  const handleLoadOlderMessages = useCallback(async () => {
+    if (isLoadingOlder || !hasMoreHistory) return;
+    setIsLoadingOlder(true);
+    const before = oldestTimestampRef.current;
+    const [msgs, offers] = await Promise.all([
+      networkService.getMessageHistory(selectedTargetId, before),
+      networkService.getFileHistory(selectedTargetId, before),
+    ]);
+    if (msgs.length > 0 || offers.length > 0) {
+      const allTs = [
+        ...(msgs.length > 0 ? [msgs[0].timestamp] : []),
+        ...(offers.length > 0 ? [offers[0].timestamp] : []),
+      ];
+      oldestTimestampRef.current = Math.min(...allTs);
+      setHistoryMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        return [...msgs.filter((m) => !existingIds.has(m.id)), ...prev];
+      });
+      setHistoryOffers((prev) => {
+        const existingIds = new Set(prev.map((o) => o.transferId));
+        return [...offers.filter((o) => !existingIds.has(o.transferId)), ...prev];
+      });
+      setHasMoreHistory(msgs.length >= 100 || offers.length >= 100);
+    } else {
+      setHasMoreHistory(false);
+    }
+    setIsLoadingOlder(false);
+  }, [isLoadingOlder, hasMoreHistory, selectedTargetId]);
+
 
   useEffect(() => {
     const handleConnectionStatus = (data: { connected: boolean; serverAddr?: string }) => {
@@ -181,19 +247,43 @@ export default function AppScreen() {
     fileOffer?: FileOffer;
   }
 
+  // Merge history + live items (deduped by id/transferId)
+  const seenMsgIds = new Set<string>();
+  const seenOfferIds = new Set<string>();
   const timelineItems: TimelineItem[] = [];
-  filteredMessages.forEach((msg) => {
-    timelineItems.push({ id: msg.id, type: 'chat', timestamp: msg.timestamp, chat: msg });
+
+  // 1. History messages (older, from DB)
+  historyMessages.forEach((msg) => {
+    if (!seenMsgIds.has(msg.id)) {
+      seenMsgIds.add(msg.id);
+      timelineItems.push({ id: msg.id, type: 'chat', timestamp: msg.timestamp, chat: msg });
+    }
   });
 
-  fileOffers.forEach((offer) => {
-    if (isPublic && offer.targetId === '') {
+  // 2. History file offers (older, from DB)
+  historyOffers.forEach((offer) => {
+    if (!seenOfferIds.has(offer.transferId)) {
+      seenOfferIds.add(offer.transferId);
       timelineItems.push({ id: offer.transferId, type: 'file', timestamp: offer.timestamp, fileOffer: offer });
-    } else if (
-      !isPublic &&
+    }
+  });
+
+  // 3. Live messages (in-memory, may overlap with history)
+  filteredMessages.forEach((msg) => {
+    if (!seenMsgIds.has(msg.id)) {
+      seenMsgIds.add(msg.id);
+      timelineItems.push({ id: msg.id, type: 'chat', timestamp: msg.timestamp, chat: msg });
+    }
+  });
+
+  // 4. Live file offers
+  fileOffers.forEach((offer) => {
+    const includePublic = isPublic && offer.targetId === '';
+    const includeDM = !isPublic &&
       ((offer.senderId === myPeer.id && offer.targetId === selectedTargetId) ||
-        (offer.senderId === selectedTargetId && offer.targetId === myPeer.id))
-    ) {
+       (offer.senderId === selectedTargetId && offer.targetId === myPeer.id));
+    if ((includePublic || includeDM) && !seenOfferIds.has(offer.transferId)) {
+      seenOfferIds.add(offer.transferId);
       timelineItems.push({ id: offer.transferId, type: 'file', timestamp: offer.timestamp, fileOffer: offer });
     }
   });
@@ -309,8 +399,27 @@ export default function AppScreen() {
             }}
             contentContainerStyle={styles.timelineList}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+              if (e.nativeEvent.contentOffset.y < 80 && hasMoreHistory && !isLoadingOlder) {
+                handleLoadOlderMessages();
+              }
+            }}
+            scrollEventThrottle={200}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
+            ListHeaderComponent={
+              hasMoreHistory ? (
+                <TouchableOpacity
+                  style={styles.loadOlderBtn}
+                  onPress={handleLoadOlderMessages}
+                  disabled={isLoadingOlder}
+                >
+                  {isLoadingOlder
+                    ? <ActivityIndicator size="small" color="#6366f1" />
+                    : <Text style={styles.loadOlderText}>⬆ Load older messages</Text>}
+                </TouchableOpacity>
+              ) : null
+            }
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyTitle}>No messages yet</Text>
@@ -368,6 +477,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#020617',
+  },
+  loadOlderBtn: {
+    alignSelf: 'center',
+    marginVertical: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.35)',
+  },
+  loadOlderText: {
+    color: '#818cf8',
+    fontSize: 12,
+    fontWeight: '600',
   },
   toastContainer: {
     backgroundColor: 'rgba(217, 119, 6, 0.9)',

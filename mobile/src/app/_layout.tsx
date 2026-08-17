@@ -44,11 +44,11 @@ export default function RootLayout() {
                   style={styles.logoImage}
                 />
               </View>
-              <Text style={styles.appTitle}>LAN Msngr</Text>
+              <Text style={styles.appTitle}>TakLan</Text>
               <View style={styles.versionBadge}>
                 <Text style={styles.versionText}>v{packageJson.version}</Text>
               </View>
-              <Text style={styles.subTitle}>Local Area Network Messenger</Text>
+              <Text style={styles.subTitle}>Talk on your LAN - offline, fast, secure</Text>
 
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color="#6366F1" />

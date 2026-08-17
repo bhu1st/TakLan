@@ -2,6 +2,8 @@
 build/bin/
 bin/
 release/
+taklan
+taklan.exe
 lanmsngr
 lanmsngr.exe
 *.exe
@@ -9,6 +11,8 @@ lanmsngr.exe
 *.dll
 *.so
 *.dylib
+*.timestamp-*.mjs
+vite.config.*.timestamp-*
 
 # Go & Test artifacts
 *.test

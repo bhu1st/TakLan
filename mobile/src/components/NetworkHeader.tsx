@@ -25,7 +25,7 @@ export const NetworkHeader: React.FC<NetworkHeaderProps> = ({
             source={require('../../assets/images/icon.png')}
             style={styles.appIcon}
           />
-          <Text style={styles.title}>LAN Msngr</Text>
+          <Text style={styles.title}>TakLan</Text>
           <View style={styles.versionBadge}>
             <Text style={styles.versionText}>v{packageJson.version}</Text>
           </View>

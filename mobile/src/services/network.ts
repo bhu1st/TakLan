@@ -5,6 +5,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
 import { Vibration, Linking } from 'react-native';
 import { Peer, ChatMessage, FileOffer, FileProgress, PingAlert, Packet } from '../types/network';
+import { db } from './db';
 
 type EventListener = (data: any) => void;
 
@@ -32,6 +33,7 @@ class NetworkService {
   constructor() {
     this.initDeviceIp();
     this.initAudioMode();
+    db.init();
   }
 
   private async initAudioMode() {
@@ -382,7 +384,8 @@ class NetworkService {
 
     const payload = JSON.stringify(msg);
     this.sendPacket({ type: 'CHAT', payload });
-    // Emit locally for optimistic update
+    // Persist locally and emit for optimistic update
+    db.saveMessage(msg);
     this.emit('new-message', msg);
   }
 
@@ -437,6 +440,7 @@ class NetworkService {
 
       const payload = JSON.stringify(offer);
       this.sendPacket({ type: 'FILE_OFFER', payload });
+      db.saveFileOffer(offer);
       this.emit('file-offer', offer);
       return true;
     } catch (err) {
@@ -570,6 +574,8 @@ class NetworkService {
         }
         case 'CHAT': {
           const chat: ChatMessage = JSON.parse(packet.payload);
+          // Persist to SQLite (fire-and-forget)
+          db.saveMessage(chat);
           if (chat.senderId !== this.myPeer.id) {
             try {
               Vibration.vibrate([0, 120]);
@@ -596,6 +602,7 @@ class NetworkService {
         case 'FILE_OFFER': {
           const offer: FileOffer = JSON.parse(packet.payload);
           this.incomingOffers.set(offer.transferId, offer);
+          db.saveFileOffer(offer);
           this.emit('file-offer', offer);
           break;
         }
@@ -605,6 +612,7 @@ class NetworkService {
           if (resp.accepted) {
             this.startStreamingFile(resp.transferId);
           } else {
+            db.updateFileStatus(resp.transferId, 'rejected');
             this.emit('file-progress', { transferId: resp.transferId, status: 'rejected', progress: 0 });
           }
           break;
@@ -630,6 +638,10 @@ class NetworkService {
           const progressPct = Math.min(100, Math.round((currentChunk / total) * 100));
           const isComplete = currentChunk >= total;
 
+          if (isComplete && transferInfo?.fileUri) {
+            db.updateFileStatus(transferId, 'completed', transferInfo.fileUri);
+          }
+
           this.emit('file-progress', {
             transferId,
             status: isComplete ? 'completed' : 'transferring',
@@ -647,6 +659,24 @@ class NetworkService {
     } catch (e) {
       console.warn('[Android Network] Error handling packet:', e);
     }
+  }
+
+  /** Retrieve paginated chat history for a conversation from local SQLite DB */
+  public async getMessageHistory(
+    peerId: string,
+    beforeTimestamp?: number,
+    limit: number = 100,
+  ): Promise<ChatMessage[]> {
+    return db.getMessages(peerId, this.myPeer.id, beforeTimestamp, limit);
+  }
+
+  /** Retrieve paginated file offer history for a conversation from local SQLite DB */
+  public async getFileHistory(
+    peerId: string,
+    beforeTimestamp?: number,
+    limit: number = 100,
+  ): Promise<FileOffer[]> {
+    return db.getFileOffers(peerId, this.myPeer.id, beforeTimestamp, limit);
   }
 
   public async openFile(filePath: string) {

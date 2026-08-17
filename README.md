@@ -1,8 +1,14 @@
-# LAN Msngr
+# TakLan
 
-![LAN Msngr Banner](lanmsngr.png)
+![TakLan Banner](taklan.png)
 
 A modern, cross-platform messaging and file sharing ecosystem built with **Go**, **Wails v2**, **React**, **Tailwind CSS**, and **React Native (Expo)** for high-speed communication across Local Area Networks (LAN).
+
+---
+
+## 📸 Preview
+
+![TakLan Desktop Screenshot](ss.png)
 
 ---
 
@@ -24,7 +30,7 @@ A modern, cross-platform messaging and file sharing ecosystem built with **Go**,
 ## Repository Structure
 
 - **[`desktop/`](./desktop)**: Desktop app built with **Go**, **Wails v2**, **React**, and **Tailwind CSS**.
-- **[`android/`](./android)**: Mobile app built with **React Native**, **TypeScript**, and **Expo (SDK 54)**.
+- **[`mobile/`](./mobile)**: Mobile app built with **React Native**, **TypeScript**, and **Expo (SDK 54)**.
 
 ---
 
@@ -48,23 +54,23 @@ npm run start
 
 ## Production Build Instructions
 
-### 1. Build Desktop Executable (`lanmsngr.exe`) & Release Package
+### 1. Build Desktop Executable (`TakLan.exe`) & Release Package
 
 #### Automated Release Build (Recommended)
 Run the automated PowerShell release script from either the root folder or `desktop/`:
 ```powershell
 .\build.ps1
 ```
-This script dynamically extracts the version from `wails.json`, runs `wails build`, and packages `lanmsngr.exe`, `LICENSE`, `README.md`, and `lanmsngr.png` into:
-- **Release Directory**: `release/LanMsngr-win-v<version>/`
-- **ZIP Archive**: `release/LanMsngr-win-v<version>.zip`
+This script dynamically extracts the version from `wails.json`, runs `wails build`, and packages `TakLan.exe`, `LICENSE`, `README.md`, and `TakLan.png` into:
+- **Release Directory**: `release/TakLan-win-v<version>/`
+- **ZIP Archive**: `release/TakLan-win-v<version>.zip`
 
 #### Manual Wails CLI Build
 ```bash
 cd desktop
 wails build
 ```
-The compiled executable will be placed in `desktop/build/bin/lanmsngr.exe`.
+The compiled executable will be placed in `desktop/build/bin/TakLan.exe`.
 
 ---
 
@@ -82,35 +88,57 @@ The compiled executable will be placed in `desktop/build/bin/lanmsngr.exe`.
 
 3. Build & Run:
 
-#### Option A: Expo Go (Development)
+> **⚠️ SQLite Requirement**: The app uses `expo-sqlite` for local chat history, which is a **native module** and requires a **native build**. It will not work with plain Expo Go.
+
+#### Option A: Local Native Build — SQLite Enabled ✅ (Recommended)
+Generates native Android project from Expo config, then builds and installs on your connected device/emulator:
+```bash
+cd mobile
+
+# Step 1 — Generate native Android project:
+npx expo prebuild --platform android --clean
+
+# Step 2 — Build release APK and install on device:
+cd android
+./gradlew installRelease --no-daemon
+```
+> Requires Android Studio with a connected device or running emulator. Run `npx expo prebuild` again whenever you add new native dependencies.
+
+#### Option B: Debug Build with Metro Hot-Reload
+For active development with live code reload:
+```bash
+cd mobile
+
+# Step 1 — Generate native Android project (first time or after native dep changes):
+npx expo prebuild --platform android
+
+# Step 2 — Start Metro bundler (Terminal 1):
+npm run start
+
+# Step 3 — Build & install debug APK (Terminal 2):
+cd android && ./gradlew installDebug --no-daemon
+```
+
+#### Option C: Expo Go — SQLite Disabled ⚠️
+For quick UI preview only (chat/file transfer works, history does not persist):
 ```bash
 cd mobile
 npm run start
+# Scan QR code with Expo Go app
 ```
 
-#### Option B: Standalone Android APK Build (via EAS Cloud)
+#### Option D: Standalone Release APK (via Gradle, no device)
+```bash
+cd mobile/android
+./gradlew assembleRelease --no-daemon
+```
+*Output*: `mobile/android/app/build/outputs/apk/release/app-release.apk`
+
+#### Option E: EAS Cloud Build
 ```bash
 cd mobile
 npx eas build -p android --profile preview
 ```
-
-#### Option C: Native Offline APK Build (via Gradle)
-
-- **For Standalone Offline Testing (No Metro server needed on PC)**:
-  ```bash
-  cd mobile/android
-  ./gradlew assembleRelease --no-daemon
-  ```
-  *Output*: `mobile/android/app/build/outputs/apk/release/app-release.apk`
-
-- **For Active Live Development (With Metro running on PC)**:
-  ```bash
-  # 1. Start Metro server in terminal 1:
-  cd mobile && npm run start
-
-  # 2. Build & install Debug APK:
-  cd mobile/android && ./gradlew assembleDebug --no-daemon
-  ```
 
 ---
 

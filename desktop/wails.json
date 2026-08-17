@@ -1,8 +1,8 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "lanmsngr",
-  "outputfilename": "lanmsngr",
-  "version": "1.1.0",
+  "name": "taklan",
+  "outputfilename": "taklan",
+  "version": "1.2.0",
   "frontend:install": "npm install",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
