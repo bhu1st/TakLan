@@ -132,6 +132,7 @@ export function App() {
             targetHostname: item.targetHostname,
             content: item.content,
             timestamp: item.timestamp,
+            replyTo: item.replyTo ? { id: item.replyTo.id, senderNick: item.replyTo.senderNick, content: item.replyTo.content } : undefined,
           }));
 
           setMessages(prev => {
@@ -229,6 +230,7 @@ export function App() {
             targetHostname: item.targetHostname,
             content: item.content,
             timestamp: item.timestamp,
+            replyTo: item.replyTo ? { id: item.replyTo.id, senderNick: item.replyTo.senderNick, content: item.replyTo.content } : undefined,
           }));
 
           setMessages(prev => {
@@ -455,8 +457,15 @@ export function App() {
     });
   };
 
-  const handleSendMessage = (content: string) => {
-    SendChatMessage(selectedTargetId, selectedTargetHostname, content).catch(err => {
+  const handleSendMessage = (content: string, replyTo?: { id: string; senderNick: string; content: string }) => {
+    SendChatMessage(
+      selectedTargetId,
+      selectedTargetHostname,
+      content,
+      replyTo?.id || '',
+      replyTo?.senderNick || '',
+      replyTo?.content || ''
+    ).catch(err => {
       console.error("Failed to send message:", err);
     });
   };

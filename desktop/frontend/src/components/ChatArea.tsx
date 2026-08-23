@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Peer, ChatMessage, FileOffer, FileProgress } from '../types';
+import { Peer, ChatMessage, FileOffer, FileProgress, ChatReply } from '../types';
 import { FileCard } from './FileCard';
-import { Send, Paperclip, Bell, Hash, User, Sparkles, WifiOff, RefreshCw, ArrowUp } from 'lucide-react';
+import { Send, Paperclip, Bell, Hash, User, Sparkles, WifiOff, RefreshCw, ArrowUp, Reply, X } from 'lucide-react';
 
 interface TimelineItem {
   id: string;
@@ -21,7 +21,7 @@ interface ChatAreaProps {
   fileOffers: FileOffer[];
   fileProgresses: Record<string, FileProgress>;
   pings: Array<{ id: string; senderNick: string; senderIp: string; timestamp: number; targetId: string }>;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string, replyTo?: ChatReply) => void;
   onSendFile: () => void;
   onSendPing: () => void;
   onAcceptFile: (transferId: string) => void;
@@ -51,6 +51,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   isLoadingOlder,
 }) => {
   const [inputText, setInputText] = useState('');
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -141,22 +142,88 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || isOfflinePeer) return;
-    onSendMessage(inputText);
+    onSendMessage(
+      inputText,
+      replyingTo
+        ? {
+            id: replyingTo.id,
+            senderNick: replyingTo.senderNick,
+            content: replyingTo.content,
+          }
+        : undefined
+    );
     setInputText('');
+    setReplyingTo(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape') {
+      if (replyingTo) {
+        setReplyingTo(null);
+      }
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (inputText.trim() && !isOfflinePeer) {
-        onSendMessage(inputText);
+        onSendMessage(
+          inputText,
+          replyingTo
+            ? {
+                id: replyingTo.id,
+                senderNick: replyingTo.senderNick,
+                content: replyingTo.content,
+              }
+            : undefined
+        );
         setInputText('');
+        setReplyingTo(null);
       }
     }
   };
 
   const formatTime = (ts: number) => {
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const handleOpenLink = (e: React.MouseEvent, rawUrl: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    let fullUrl = rawUrl;
+    if (!/^https?:\/\//i.test(fullUrl)) {
+      fullUrl = 'https://' + fullUrl;
+    }
+    if (onOpenFile && (rawUrl.startsWith('file://') || rawUrl.startsWith('/') || /^[a-zA-Z]:\\/.test(rawUrl))) {
+      onOpenFile(rawUrl);
+    } else if ((window as any).runtime && (window as any).runtime.BrowserOpenURL) {
+      (window as any).runtime.BrowserOpenURL(fullUrl);
+    } else {
+      window.open(fullUrl, '_blank');
+    }
+  };
+
+  const URL_REGEX = /(https?:\/\/[^\s<>"'`]+|www\.[^\s<>"'`]+)/gi;
+
+  const renderLinkifiedText = (text: string) => {
+    const parts = text.split(URL_REGEX);
+    return parts.map((part, index) => {
+      if (part.match(URL_REGEX)) {
+        return (
+          <a
+            key={index}
+            href={part.startsWith('http') ? part : `https://${part}`}
+            onClick={(e) => handleOpenLink(e, part)}
+            className="text-cyan-300 hover:text-cyan-100 underline underline-offset-2 break-all cursor-pointer font-medium transition-colors select-text"
+            title={`Open ${part}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {part}
+          </a>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
   };
 
   const renderMessageContent = (content: string) => {
@@ -166,14 +233,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (isAsciiArt) {
       return (
         <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-tight font-normal select-text overflow-x-auto m-0">
-          {content}
+          {renderLinkifiedText(content)}
         </pre>
       );
     }
 
     return (
       <p className="whitespace-pre-wrap break-words text-sm font-normal select-text m-0">
-        {content}
+        {renderLinkifiedText(content)}
       </p>
     );
   };
@@ -275,7 +342,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               return (
                 <div
                   key={item.id}
-                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                  id={`msg-${item.id}`}
+                  className={`group relative flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                 >
                   <div className="flex items-center gap-2 mb-1 text-[11px] text-slate-400">
                     <span className="font-semibold text-slate-300">{item.chat.senderNick}</span>
@@ -284,13 +352,47 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                     <span>{formatTime(item.timestamp)}</span>
                   </div>
 
-                  <div
-                    className={`max-w-2xl px-4 py-2.5 rounded-2xl ${isMe
-                      ? 'bg-indigo-600 text-white rounded-br-none shadow-md shadow-indigo-600/20'
-                      : 'glass-card text-slate-100 rounded-bl-none border border-slate-700/60'
-                      }`}
-                  >
-                    {renderMessageContent(item.chat.content)}
+                  <div className={`relative flex items-center gap-1.5 max-w-2xl ${isMe ? 'flex-row' : 'flex-row-reverse'}`}>
+                    {/* Hover Quick Action - Reply Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReplyingTo(item.chat!);
+                        textareaRef.current?.focus();
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg bg-slate-800/90 hover:bg-indigo-600 text-slate-400 hover:text-white border border-slate-700/70 shadow-md text-xs flex items-center justify-center shrink-0 cursor-pointer"
+                      title={`Reply to ${item.chat.senderNick}`}
+                    >
+                      <Reply className="w-3.5 h-3.5" />
+                    </button>
+
+                    <div
+                      className={`px-4 py-2.5 rounded-2xl ${isMe
+                        ? 'bg-indigo-600 text-white rounded-br-none shadow-md shadow-indigo-600/20'
+                        : 'glass-card text-slate-100 rounded-bl-none border border-slate-700/60'
+                        }`}
+                    >
+                      {/* Replied Message Quote Snippet */}
+                      {item.chat.replyTo && (
+                        <div
+                          className={`mb-2 px-3 py-1.5 rounded-lg text-xs border-l-2 flex flex-col gap-0.5 ${
+                            isMe
+                              ? 'bg-indigo-700/70 border-indigo-300 text-indigo-100'
+                              : 'bg-slate-800/90 border-cyan-400 text-slate-300'
+                          }`}
+                        >
+                          <div className="font-semibold text-[11px] flex items-center gap-1 text-indigo-200">
+                            <Reply className="w-3 h-3 rotate-180" />
+                            <span>{item.chat.replyTo.senderNick}</span>
+                          </div>
+                          <div className="line-clamp-2 truncate opacity-90 font-mono text-[11px]">
+                            {item.chat.replyTo.content}
+                          </div>
+                        </div>
+                      )}
+
+                      {renderMessageContent(item.chat.content)}
+                    </div>
                   </div>
                 </div>
               );
@@ -330,7 +432,35 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       </div>
 
       {/* Message Input Footer */}
-      <div className="p-4 border-t border-slate-800/80 bg-slate-900/40">
+      <div className="p-4 border-t border-slate-800/80 bg-slate-900/40 flex flex-col gap-2">
+        {/* Reply Context Preview Banner */}
+        {replyingTo && (
+          <div className="px-3.5 py-2 bg-slate-900/90 border border-indigo-500/30 rounded-xl flex items-center justify-between gap-3 text-xs shadow-lg animate-fadeIn">
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="p-1 rounded-md bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shrink-0">
+                <Reply className="w-3.5 h-3.5" />
+              </div>
+              <div className="overflow-hidden">
+                <div className="flex items-center gap-1.5 text-slate-300">
+                  <span className="text-slate-400 text-[11px]">Replying to</span>
+                  <span className="font-semibold text-indigo-300">{replyingTo.senderNick}</span>
+                </div>
+                <p className="text-slate-400 truncate font-mono text-[11px] max-w-xl m-0">
+                  {replyingTo.content}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyingTo(null)}
+              className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors shrink-0"
+              title="Cancel reply (Esc)"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="flex items-end gap-2">
           <button
             type="button"
@@ -349,9 +479,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             placeholder={
               isOfflinePeer
                 ? "Peer is offline. Messages can only be sent when peer is online over LAN."
-                : isPublic
-                  ? "Broadcast message... (Enter to send, Shift+Enter for new line)"
-                  : `Direct message to ${targetPeer?.nickname || 'Peer'}... (Enter to send, Shift+Enter for new line)`
+                : replyingTo
+                  ? `Replying to ${replyingTo.senderNick}... (Enter to send, Esc to cancel)`
+                  : isPublic
+                    ? "Broadcast message... (Enter to send, Shift+Enter for new line)"
+                    : `Direct message to ${targetPeer?.nickname || 'Peer'}... (Enter to send, Shift+Enter for new line)`
             }
             value={inputText}
             onChange={e => setInputText(e.target.value)}
@@ -362,7 +494,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           <button
             type="submit"
             disabled={!inputText.trim() || Boolean(isOfflinePeer)}
-            className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-medium transition-all shadow-md shadow-indigo-600/20 mb-0.5"
+            className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-medium transition-all shadow-md shadow-indigo-600/20 mb-0.5 cursor-pointer"
           >
             <Send className="w-5 h-5" />
           </button>

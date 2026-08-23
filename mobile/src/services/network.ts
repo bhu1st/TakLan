@@ -4,7 +4,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
 import { Vibration, Linking } from 'react-native';
-import { Peer, ChatMessage, FileOffer, FileProgress, PingAlert, Packet } from '../types/network';
+import { Peer, ChatMessage, FileOffer, FileProgress, PingAlert, Packet, ChatReply } from '../types/network';
 import { db } from './db';
 
 type EventListener = (data: any) => void;
@@ -366,7 +366,7 @@ class NetworkService {
     this.emit('connection-status', { connected: false });
   }
 
-  public sendChatMessage(targetId: string, content: string, targetHostname: string = '') {
+  public sendChatMessage(targetId: string, content: string, targetHostname: string = '', replyTo?: ChatReply) {
     const targetPeer = this.currentPeers.find(p => p.id === targetId || p.hostname === targetId);
     const resolvedTargetHostname = targetHostname || targetPeer?.hostname || '';
 
@@ -380,6 +380,7 @@ class NetworkService {
       targetHostname: resolvedTargetHostname,
       content,
       timestamp: Date.now(),
+      replyTo,
     };
 
     const payload = JSON.stringify(msg);

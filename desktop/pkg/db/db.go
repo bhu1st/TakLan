@@ -20,15 +20,22 @@ type PeerRecord struct {
 	LastSeen int64  `json:"lastSeen"`
 }
 
+type ChatReplyRecord struct {
+	ID         string `json:"id"`
+	SenderNick string `json:"senderNick"`
+	Content    string `json:"content"`
+}
+
 type MessageRecord struct {
-	ID             string `json:"id"`
-	SenderID       string `json:"senderId"`
-	SenderHostname string `json:"senderHostname"`
-	SenderNick     string `json:"senderNick"`
-	SenderIP       string `json:"senderIp"`
-	TargetHostname string `json:"targetHostname"` // "" for public channel, Hostname for private
-	Content        string `json:"content"`
-	Timestamp      int64  `json:"timestamp"`
+	ID             string           `json:"id"`
+	SenderID       string           `json:"senderId"`
+	SenderHostname string           `json:"senderHostname"`
+	SenderNick     string           `json:"senderNick"`
+	SenderIP       string           `json:"senderIp"`
+	TargetHostname string           `json:"targetHostname"` // "" for public channel, Hostname for private
+	Content        string           `json:"content"`
+	Timestamp      int64            `json:"timestamp"`
+	ReplyTo        *ChatReplyRecord `json:"replyTo,omitempty"`
 }
 
 type FileOfferRecord struct {
@@ -105,7 +112,10 @@ func (d *Database) createTables() error {
 		sender_ip TEXT NOT NULL,
 		target_hostname TEXT NOT NULL,
 		content TEXT NOT NULL,
-		timestamp INTEGER NOT NULL
+		timestamp INTEGER NOT NULL,
+		reply_to_id TEXT DEFAULT '',
+		reply_to_nick TEXT DEFAULT '',
+		reply_to_content TEXT DEFAULT ''
 	);
 	CREATE INDEX IF NOT EXISTS idx_messages_target_hostname ON messages(target_hostname);
 	CREATE INDEX IF NOT EXISTS idx_messages_sender_hostname ON messages(sender_hostname);
@@ -136,6 +146,11 @@ func (d *Database) createTables() error {
 	if _, err := d.db.Exec(createMessagesTable); err != nil {
 		return fmt.Errorf("failed to create messages table: %w", err)
 	}
+	// Migrations for existing databases
+	_, _ = d.db.Exec("ALTER TABLE messages ADD COLUMN reply_to_id TEXT DEFAULT '';")
+	_, _ = d.db.Exec("ALTER TABLE messages ADD COLUMN reply_to_nick TEXT DEFAULT '';")
+	_, _ = d.db.Exec("ALTER TABLE messages ADD COLUMN reply_to_content TEXT DEFAULT '';")
+
 	if _, err := d.db.Exec(createFileTransfersTable); err != nil {
 		return fmt.Errorf("failed to create file_transfers table: %w", err)
 	}
@@ -200,11 +215,18 @@ func (d *Database) SaveMessage(msg MessageRecord) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
+	var replyID, replyNick, replyContent string
+	if msg.ReplyTo != nil {
+		replyID = msg.ReplyTo.ID
+		replyNick = msg.ReplyTo.SenderNick
+		replyContent = msg.ReplyTo.Content
+	}
+
 	query := `
-	INSERT OR IGNORE INTO messages (id, sender_id, sender_hostname, sender_nick, sender_ip, target_hostname, content, timestamp)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+	INSERT OR IGNORE INTO messages (id, sender_id, sender_hostname, sender_nick, sender_ip, target_hostname, content, timestamp, reply_to_id, reply_to_nick, reply_to_content)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 	`
-	_, err := d.db.Exec(query, msg.ID, msg.SenderID, msg.SenderHostname, msg.SenderNick, msg.SenderIP, msg.TargetHostname, msg.Content, msg.Timestamp)
+	_, err := d.db.Exec(query, msg.ID, msg.SenderID, msg.SenderHostname, msg.SenderNick, msg.SenderIP, msg.TargetHostname, msg.Content, msg.Timestamp, replyID, replyNick, replyContent)
 	return err
 }
 
@@ -221,13 +243,13 @@ func (d *Database) GetMessages(targetHostname, targetID, myHostname, myID string
 
 	if targetHostname == "" && targetID == "" {
 		if beforeTimestamp > 0 {
-			query = `SELECT id, sender_id, sender_hostname, sender_nick, sender_ip, target_hostname, content, timestamp 
+			query = `SELECT id, sender_id, sender_hostname, sender_nick, sender_ip, target_hostname, content, timestamp, COALESCE(reply_to_id, ''), COALESCE(reply_to_nick, ''), COALESCE(reply_to_content, '') 
 			         FROM messages 
 			         WHERE (target_hostname = '' OR target_hostname = 'general') AND timestamp < ?
 			         ORDER BY timestamp DESC LIMIT ?`
 			args = []interface{}{beforeTimestamp, limit}
 		} else {
-			query = `SELECT id, sender_id, sender_hostname, sender_nick, sender_ip, target_hostname, content, timestamp 
+			query = `SELECT id, sender_id, sender_hostname, sender_nick, sender_ip, target_hostname, content, timestamp, COALESCE(reply_to_id, ''), COALESCE(reply_to_nick, ''), COALESCE(reply_to_content, '') 
 			         FROM messages 
 			         WHERE target_hostname = '' OR target_hostname = 'general'
 			         ORDER BY timestamp DESC LIMIT ?`
@@ -235,7 +257,7 @@ func (d *Database) GetMessages(targetHostname, targetID, myHostname, myID string
 		}
 	} else {
 		if beforeTimestamp > 0 {
-			query = `SELECT id, sender_id, sender_hostname, sender_nick, sender_ip, target_hostname, content, timestamp 
+			query = `SELECT id, sender_id, sender_hostname, sender_nick, sender_ip, target_hostname, content, timestamp, COALESCE(reply_to_id, ''), COALESCE(reply_to_nick, ''), COALESCE(reply_to_content, '') 
 			         FROM messages 
 			         WHERE (( (sender_hostname = ? OR (sender_id != '' AND sender_id = ?))
 			                  AND (target_hostname = ? OR target_hostname = ? OR target_hostname = ?) )
@@ -249,7 +271,7 @@ func (d *Database) GetMessages(targetHostname, targetID, myHostname, myID string
 				beforeTimestamp, limit,
 			}
 		} else {
-			query = `SELECT id, sender_id, sender_hostname, sender_nick, sender_ip, target_hostname, content, timestamp 
+			query = `SELECT id, sender_id, sender_hostname, sender_nick, sender_ip, target_hostname, content, timestamp, COALESCE(reply_to_id, ''), COALESCE(reply_to_nick, ''), COALESCE(reply_to_content, '') 
 			         FROM messages 
 			         WHERE (( (sender_hostname = ? OR (sender_id != '' AND sender_id = ?))
 			                  AND (target_hostname = ? OR target_hostname = ? OR target_hostname = ?) )
@@ -273,8 +295,16 @@ func (d *Database) GetMessages(targetHostname, targetID, myHostname, myID string
 	var descResult []MessageRecord
 	for rows.Next() {
 		var m MessageRecord
-		if err := rows.Scan(&m.ID, &m.SenderID, &m.SenderHostname, &m.SenderNick, &m.SenderIP, &m.TargetHostname, &m.Content, &m.Timestamp); err != nil {
+		var replyID, replyNick, replyContent string
+		if err := rows.Scan(&m.ID, &m.SenderID, &m.SenderHostname, &m.SenderNick, &m.SenderIP, &m.TargetHostname, &m.Content, &m.Timestamp, &replyID, &replyNick, &replyContent); err != nil {
 			continue
+		}
+		if replyID != "" {
+			m.ReplyTo = &ChatReplyRecord{
+				ID:         replyID,
+				SenderNick: replyNick,
+				Content:    replyContent,
+			}
 		}
 		descResult = append(descResult, m)
 	}

@@ -8,6 +8,12 @@ export interface Peer {
   isOnline?: boolean;
 }
 
+export interface ChatReply {
+  id: string;
+  senderNick: string;
+  content: string;
+}
+
 export interface ChatMessage {
   id: string;
   senderId: string;
@@ -18,6 +24,7 @@ export interface ChatMessage {
   targetHostname?: string;
   content: string;
   timestamp: number;
+  replyTo?: ChatReply;
 }
 
 export interface PingAlert {

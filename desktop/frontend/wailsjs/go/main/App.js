@@ -34,8 +34,8 @@ export function SelectAndSendFile(arg1) {
   return window['go']['main']['App']['SelectAndSendFile'](arg1);
 }
 
-export function SendChatMessage(arg1, arg2, arg3) {
-  return window['go']['main']['App']['SendChatMessage'](arg1, arg2, arg3);
+export function SendChatMessage(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['SendChatMessage'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function SendPing(arg1) {

@@ -21,7 +21,10 @@ class DatabaseService {
           target_id TEXT DEFAULT '',
           target_hostname TEXT DEFAULT '',
           content TEXT NOT NULL,
-          timestamp INTEGER NOT NULL
+          timestamp INTEGER NOT NULL,
+          reply_to_id TEXT DEFAULT '',
+          reply_to_nick TEXT DEFAULT '',
+          reply_to_content TEXT DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS file_transfers (
@@ -52,6 +55,16 @@ class DatabaseService {
         CREATE INDEX IF NOT EXISTS idx_messages_target ON messages(target_id);
         CREATE INDEX IF NOT EXISTS idx_file_transfers_timestamp ON file_transfers(timestamp);
       `);
+
+      // Migration for existing tables
+      try {
+        await this.db.execAsync(`
+          ALTER TABLE messages ADD COLUMN reply_to_id TEXT DEFAULT '';
+          ALTER TABLE messages ADD COLUMN reply_to_nick TEXT DEFAULT '';
+          ALTER TABLE messages ADD COLUMN reply_to_content TEXT DEFAULT '';
+        `);
+      } catch (_) {}
+
       console.log('[DB] Database initialised');
     } catch (err) {
       console.error('[DB] Init error:', err);
@@ -63,8 +76,8 @@ class DatabaseService {
     try {
       await this.db.runAsync(
         `INSERT OR IGNORE INTO messages
-           (id, sender_id, sender_hostname, sender_nick, sender_ip, target_id, target_hostname, content, timestamp)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, sender_id, sender_hostname, sender_nick, sender_ip, target_id, target_hostname, content, timestamp, reply_to_id, reply_to_nick, reply_to_content)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         msg.id,
         msg.senderId,
         msg.senderHostname ?? '',
@@ -74,6 +87,9 @@ class DatabaseService {
         msg.targetHostname ?? '',
         msg.content,
         msg.timestamp,
+        msg.replyTo?.id ?? '',
+        msg.replyTo?.senderNick ?? '',
+        msg.replyTo?.content ?? '',
       );
     } catch (err) {
       console.warn('[DB] saveMessage error:', err);
@@ -197,6 +213,13 @@ class DatabaseService {
         targetHostname: r.target_hostname || undefined,
         content: r.content,
         timestamp: r.timestamp,
+        replyTo: r.reply_to_id
+          ? {
+              id: r.reply_to_id,
+              senderNick: r.reply_to_nick || '',
+              content: r.reply_to_content || '',
+            }
+          : undefined,
       }));
     } catch (err) {
       console.warn('[DB] getMessages error:', err);

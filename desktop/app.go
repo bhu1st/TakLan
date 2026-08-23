@@ -277,6 +277,15 @@ func (a *App) onPacketReceived(packet network.Packet) {
 				chat.TargetHostname = a.resolvePeerHostname(chat.TargetID)
 			}
 
+			var replyRecord *db.ChatReplyRecord
+			if chat.ReplyTo != nil {
+				replyRecord = &db.ChatReplyRecord{
+					ID:         chat.ReplyTo.ID,
+					SenderNick: chat.ReplyTo.SenderNick,
+					Content:    chat.ReplyTo.Content,
+				}
+			}
+
 			if a.database != nil {
 				_ = a.database.SaveMessage(db.MessageRecord{
 					ID:             chat.ID,
@@ -287,6 +296,7 @@ func (a *App) onPacketReceived(packet network.Packet) {
 					TargetHostname: chat.TargetHostname,
 					Content:        chat.Content,
 					Timestamp:      chat.Timestamp,
+					ReplyTo:        replyRecord,
 				})
 			}
 			// If message is from another peer, restore/unminimise window to foreground
@@ -489,13 +499,28 @@ func (a *App) SetNickname(newNick string) (bool, error) {
 	return true, nil
 }
 
-// SendChatMessage sends a message to public channel or direct target
-func (a *App) SendChatMessage(targetID, targetHostname, content string) error {
+// SendChatMessage sends a message to public channel or direct target with optional reply metadata
+func (a *App) SendChatMessage(targetID, targetHostname, content, replyToID, replyToNick, replyToContent string) error {
 	msgID := uuid.New().String()[:8]
 	now := network.CurrentTimestamp()
 
 	if targetHostname == "" && targetID != "" {
 		targetHostname = a.resolvePeerHostname(targetID)
+	}
+
+	var replyPayload *network.ChatReplyPayload
+	var replyRecord *db.ChatReplyRecord
+	if replyToID != "" {
+		replyPayload = &network.ChatReplyPayload{
+			ID:         replyToID,
+			SenderNick: replyToNick,
+			Content:    replyToContent,
+		}
+		replyRecord = &db.ChatReplyRecord{
+			ID:         replyToID,
+			SenderNick: replyToNick,
+			Content:    replyToContent,
+		}
 	}
 
 	msgPayload := network.ChatMessagePayload{
@@ -508,6 +533,7 @@ func (a *App) SendChatMessage(targetID, targetHostname, content string) error {
 		TargetHostname: targetHostname,
 		Content:        content,
 		Timestamp:      now,
+		ReplyTo:        replyPayload,
 	}
 
 	if a.database != nil {
@@ -520,13 +546,14 @@ func (a *App) SendChatMessage(targetID, targetHostname, content string) error {
 			TargetHostname: targetHostname,
 			Content:        content,
 			Timestamp:      now,
+			ReplyTo:        replyRecord,
 		})
 	}
 
 	wailsRuntime.EventsEmit(a.ctx, "new-message", msgPayload)
 
 	if a.client != nil {
-		return a.client.SendChatMessage(msgID, targetID, targetHostname, content)
+		return a.client.SendChatMessage(msgID, targetID, targetHostname, content, replyPayload)
 	}
 	return nil
 }

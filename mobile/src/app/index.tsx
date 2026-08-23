@@ -62,8 +62,10 @@ export default function AppScreen() {
   const [pingAlert, setPingAlert] = useState<string | null>(null);
 
   const [isConnectModalVisible, setIsConnectModalVisible] = useState<boolean>(false);
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
 
 
   useEffect(() => {
@@ -229,8 +231,16 @@ export default function AppScreen() {
 
   const handleSendMessage = () => {
     if (!inputText.trim()) return;
-    networkService.sendChatMessage(selectedTargetId, inputText.trim(), targetHostname);
+    const replyMeta = replyingTo
+      ? {
+          id: replyingTo.id,
+          senderNick: replyingTo.senderNick,
+          content: replyingTo.content,
+        }
+      : undefined;
+    networkService.sendChatMessage(selectedTargetId, inputText.trim(), targetHostname, replyMeta);
     setInputText('');
+    setReplyingTo(null);
   };
 
   const handleSendPing = (targetId: string = selectedTargetId) => {
@@ -389,7 +399,16 @@ export default function AppScreen() {
             keyExtractor={(item, index) => item.id ? `${item.id}-${index}` : `item-${index}`}
             renderItem={({ item }) => {
               if (item.type === 'chat' && item.chat) {
-                return <MessageBubble chat={item.chat} isMe={item.chat.senderId === myPeer.id} />;
+                return (
+                  <MessageBubble
+                    chat={item.chat}
+                    isMe={item.chat.senderId === myPeer.id}
+                    onReply={(targetMsg) => {
+                      setReplyingTo(targetMsg);
+                      inputRef.current?.focus();
+                    }}
+                  />
+                );
               }
               if (item.type === 'file' && item.fileOffer) {
                 return (
@@ -441,6 +460,32 @@ export default function AppScreen() {
           />
         </View>
 
+        {/* Reply Context Preview Banner */}
+        {replyingTo && (
+          <View style={styles.replyBanner}>
+            <View style={styles.replyBannerContent}>
+              <View style={styles.replyBannerIconWrap}>
+                <Text style={styles.replyBannerIcon}>↩</Text>
+              </View>
+              <View style={styles.replyBannerTextWrap}>
+                <Text style={styles.replyBannerTitle} numberOfLines={1}>
+                  Replying to <Text style={styles.replyBannerNick}>{replyingTo.senderNick}</Text>
+                </Text>
+                <Text style={styles.replyBannerSnippet} numberOfLines={1} ellipsizeMode="tail">
+                  {replyingTo.content}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.replyBannerCloseBtn}
+              onPress={() => setReplyingTo(null)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.replyBannerCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Input Bar */}
         <View style={styles.inputBar}>
           <TouchableOpacity style={styles.attachBtn} onPress={handleSendFile}>
@@ -448,13 +493,14 @@ export default function AppScreen() {
           </TouchableOpacity>
 
           <TextInput
+            ref={inputRef}
             style={styles.textInput}
             value={inputText}
             onChangeText={setInputText}
             placeholder={
               isPublic
-                ? 'Broadcast message to LAN...'
-                : `Direct message to ${targetPeer?.nickname || 'Peer'}...`
+                ? (replyingTo ? `Replying to ${replyingTo.senderNick}...` : 'Broadcast message to LAN...')
+                : (replyingTo ? `Replying to ${replyingTo.senderNick}...` : `Direct message to ${targetPeer?.nickname || 'Peer'}...`)
             }
             placeholderTextColor="#64748B"
             multiline
@@ -679,6 +725,66 @@ const styles = StyleSheet.create({
   sendBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
+    fontWeight: 'bold',
+  },
+  replyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0D1527',
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    borderLeftWidth: 3,
+    borderLeftColor: '#6366F1',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  replyBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+    marginRight: 8,
+  },
+  replyBannerIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  replyBannerIcon: {
+    color: '#818CF8',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  replyBannerTextWrap: {
+    flex: 1,
+  },
+  replyBannerTitle: {
+    color: '#94A3B8',
+    fontSize: 11,
+  },
+  replyBannerNick: {
+    color: '#A5B4FC',
+    fontWeight: 'bold',
+  },
+  replyBannerSnippet: {
+    color: '#E2E8F0',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    opacity: 0.9,
+    marginTop: 1,
+  },
+  replyBannerCloseBtn: {
+    padding: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  replyBannerCloseText: {
+    color: '#94A3B8',
+    fontSize: 11,
     fontWeight: 'bold',
   },
 });

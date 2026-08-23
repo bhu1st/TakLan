@@ -53,17 +53,25 @@ type PeerListPayload struct {
 	Peers []Peer `json:"peers"`
 }
 
+// ChatReplyPayload represents the replied-to message metadata
+type ChatReplyPayload struct {
+	ID         string `json:"id"`
+	SenderNick string `json:"senderNick"`
+	Content    string `json:"content"`
+}
+
 // ChatMessagePayload represents a text chat message
 type ChatMessagePayload struct {
-	ID             string `json:"id"`
-	SenderID       string `json:"senderId"`
-	SenderHostname string `json:"senderHostname"`
-	SenderNick     string `json:"senderNick"`
-	SenderIP       string `json:"senderIp"`
-	TargetID       string `json:"targetId"`       // Empty for public channel, PeerID for private
-	TargetHostname string `json:"targetHostname"` // Empty for public channel, Hostname for private
-	Content        string `json:"content"`
-	Timestamp      int64  `json:"timestamp"`
+	ID             string            `json:"id"`
+	SenderID       string            `json:"senderId"`
+	SenderHostname string            `json:"senderHostname"`
+	SenderNick     string            `json:"senderNick"`
+	SenderIP       string            `json:"senderIp"`
+	TargetID       string            `json:"targetId"`       // Empty for public channel, PeerID for private
+	TargetHostname string            `json:"targetHostname"` // Empty for public channel, Hostname for private
+	Content        string            `json:"content"`
+	Timestamp      int64             `json:"timestamp"`
+	ReplyTo        *ChatReplyPayload `json:"replyTo,omitempty"`
 }
 
 // PingPayload represents a buzz / ping alert to a user

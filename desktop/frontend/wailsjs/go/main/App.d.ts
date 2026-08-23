@@ -19,7 +19,7 @@ export function RejectFileTransfer(arg1:string):Promise<void>;
 
 export function SelectAndSendFile(arg1:string):Promise<string>;
 
-export function SendChatMessage(arg1:string,arg2:string,arg3:string):Promise<void>;
+export function SendChatMessage(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<void>;
 
 export function SendPing(arg1:string):Promise<void>;
 
