@@ -203,7 +203,7 @@ func (t *Tray) showContextMenu() {
 	}
 	defer procDestroyMenu.Call(hMenu)
 
-	procAppendMenuW.Call(hMenu, uintptr(MF_STRING), uintptr(CMD_SHOW), uintptr(unsafe.Pointer(utf16Ptr("Open LAN Msngr"))))
+	procAppendMenuW.Call(hMenu, uintptr(MF_STRING), uintptr(CMD_SHOW), uintptr(unsafe.Pointer(utf16Ptr("Open TakLan"))))
 
 	autoStartFlags := uintptr(MF_STRING)
 	if IsAutoStartEnabled(t.appName) {

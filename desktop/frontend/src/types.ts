@@ -60,6 +60,9 @@ export interface FileProgress {
 export interface InitialState {
   myPeer: Peer;
   isHost: boolean;
+  isConnected?: boolean;
+  isDiscovering?: boolean;
+  connectionError?: string;
   serverAddr: string;
   peers: Peer[];
 }

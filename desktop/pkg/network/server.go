@@ -24,6 +24,7 @@ type Server struct {
 	peers      map[string]Peer
 	beacon     *DiscoveryBeacon
 	stopChan   chan struct{}
+	stopOnce   sync.Once
 	localIP    string
 }
 
@@ -101,11 +102,28 @@ func (s *Server) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to bind server TCP port %d: %w", s.port, err)
 	}
+	if tcpAddr, ok := ln.Addr().(*net.TCPAddr); ok && s.port == 0 {
+		s.port = tcpAddr.Port
+	}
 	s.listener = ln
 	s.wsListener = &channelListener{connChan: s.wsChan, addr: ln.Addr()}
 
 	// Start persistent HTTP/WebSocket server loop
 	go http.Serve(s.wsListener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/discover" {
+			s.mu.RLock()
+			peerCount := len(s.peers)
+			s.mu.RUnlock()
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"app":       "taklan",
+				"port":      s.port,
+				"peerCount": peerCount,
+			})
+			return
+		}
 		s.handleWebSocket(w, r)
 	}))
 
@@ -113,7 +131,7 @@ func (s *Server) Start() error {
 	s.beacon = NewDiscoveryBeacon(s.localIP, s.port)
 	s.beacon.Start()
 
-	log.Printf("[Server] Server running on %s (TCP & WebSocket)", addr)
+	log.Printf("[Server] Server running on %s (TCP & WebSocket)", ln.Addr().String())
 
 	go s.acceptLoop()
 	return nil
@@ -449,16 +467,43 @@ func (s *Server) removeClient(clientID string) {
 	s.broadcastPeerList()
 }
 
-// Stop shuts down TCP listener and discovery beacon
+// ClientCount returns the number of currently joined clients (including local host peer).
+func (s *Server) ClientCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.peers)
+}
+
+// Stop shuts down TCP listener, active client connections, and discovery beacon
 func (s *Server) Stop() {
-	close(s.stopChan)
-	if s.wsListener != nil {
-		s.wsListener.Close()
-	}
-	if s.beacon != nil {
-		s.beacon.Stop()
-	}
-	if s.listener != nil {
-		s.listener.Close()
-	}
+	s.stopOnce.Do(func() {
+		close(s.stopChan)
+		if s.beacon != nil {
+			s.beacon.Stop()
+		}
+		if s.listener != nil {
+			s.listener.Close()
+		}
+		if s.wsListener != nil {
+			s.wsListener.Close()
+		}
+
+		s.mu.Lock()
+		clients := make([]*ClientConn, 0, len(s.clients))
+		for _, c := range s.clients {
+			clients = append(clients, c)
+		}
+		s.clients = make(map[string]*ClientConn)
+		s.peers = make(map[string]Peer)
+		s.mu.Unlock()
+
+		for _, c := range clients {
+			if c.Conn != nil {
+				_ = c.Conn.Close()
+			}
+			if c.WSConn != nil {
+				_ = c.WSConn.Close()
+			}
+		}
+	})
 }

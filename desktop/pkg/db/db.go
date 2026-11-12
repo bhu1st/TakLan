@@ -57,19 +57,7 @@ type Database struct {
 	mu sync.Mutex
 }
 
-func InitDB() (*Database, error) {
-	exePath, err := os.Executable()
-	var dbDir string
-	if err == nil && exePath != "" {
-		dbDir = filepath.Dir(exePath)
-	} else {
-		appDataDir, err := os.UserConfigDir()
-		if err != nil || appDataDir == "" {
-			appDataDir = "."
-		}
-		dbDir = filepath.Join(appDataDir, "taklan")
-	}
-
+func openAndInitSQLite(dbDir string) (*Database, error) {
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		return nil, err
 	}
@@ -81,15 +69,42 @@ func InitDB() (*Database, error) {
 	}
 
 	if _, err := db.Exec("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;"); err != nil {
-		// Ignore if PRAGMA fails
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to initialize sqlite database at %s: %w", dbPath, err)
 	}
 
 	d := &Database{db: db}
 	if err := d.createTables(); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 
 	return d, nil
+}
+
+func InitDB() (*Database, error) {
+	var candidateDirs []string
+
+	if exePath, err := os.Executable(); err == nil && exePath != "" {
+		candidateDirs = append(candidateDirs, filepath.Dir(exePath))
+	}
+
+	if appDataDir, err := os.UserConfigDir(); err == nil && appDataDir != "" {
+		candidateDirs = append(candidateDirs, filepath.Join(appDataDir, "taklan"))
+	} else {
+		candidateDirs = append(candidateDirs, filepath.Join(".", "taklan"))
+	}
+
+	var lastErr error
+	for _, dir := range candidateDirs {
+		d, err := openAndInitSQLite(dir)
+		if err == nil {
+			return d, nil
+		}
+		lastErr = err
+	}
+
+	return nil, lastErr
 }
 
 func (d *Database) createTables() error {

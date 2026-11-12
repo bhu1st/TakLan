@@ -6,6 +6,10 @@ export function AcceptFileTransfer(arg1) {
   return window['go']['main']['App']['AcceptFileTransfer'](arg1);
 }
 
+export function ConnectToHost(arg1) {
+  return window['go']['main']['App']['ConnectToHost'](arg1);
+}
+
 export function GetFileOffersHistory(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetFileOffersHistory'](arg1, arg2, arg3, arg4);
 }
@@ -28,6 +32,10 @@ export function OpenFile(arg1) {
 
 export function RejectFileTransfer(arg1) {
   return window['go']['main']['App']['RejectFileTransfer'](arg1);
+}
+
+export function RescanNetwork() {
+  return window['go']['main']['App']['RescanNetwork']();
 }
 
 export function SelectAndSendFile(arg1) {

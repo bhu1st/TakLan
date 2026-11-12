@@ -4,6 +4,7 @@ import { Peer, ChatMessage, FileOffer, FileProgress, InitialState, LastMessageIn
 import { Sidebar } from './components/Sidebar';
 import { ChatArea } from './components/ChatArea';
 import { PingToast } from './components/PingToast';
+import { ConnectHostModal } from './components/ConnectHostModal';
 import { playPrivateMessageAlert } from './utils/notification';
 import {
   GetInitialState,
@@ -15,6 +16,8 @@ import {
   SelectAndSendFile,
   AcceptFileTransfer,
   RejectFileTransfer,
+  ConnectToHost,
+  RescanNetwork,
 } from '../wailsjs/go/main/App';
 
 // Safe wrapper for Wails runtime events listener
@@ -34,6 +37,10 @@ export function App() {
     joinedAt: Date.now(),
   });
   const [isHost, setIsHost] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isDiscovering, setIsDiscovering] = useState(true);
+  const [connectionError, setConnectionError] = useState('');
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [serverAddr, setServerAddr] = useState('Connecting...');
   const [peers, setPeers] = useState<Peer[]>([]);
 
@@ -289,31 +296,28 @@ export function App() {
       });
   };
 
+  const applyInitialState = (state: InitialState) => {
+    if (!state) return;
+    setIsHost(Boolean(state.isHost));
+    setIsConnected(Boolean(state.isConnected));
+    setIsDiscovering(Boolean(state.isDiscovering));
+    setConnectionError(state.connectionError || '');
+    if (state.myPeer) setMyPeer({ ...state.myPeer, isHost: Boolean(state.isHost) });
+    if (state.serverAddr) setServerAddr(state.serverAddr);
+    if (state.peers) setPeers(state.peers);
+  };
+
   // Fetch initial connection state from Go Wails backend
   useEffect(() => {
     GetInitialState()
       .then((state: InitialState) => {
-        if (state) {
-          setIsHost(state.isHost);
-          if (state.myPeer) setMyPeer({ ...state.myPeer, isHost: state.isHost });
-          if (state.serverAddr) setServerAddr(state.serverAddr);
-          if (state.peers) setPeers(state.peers);
-        }
+        applyInitialState(state);
       })
       .catch(err => {
         console.warn("GetInitialState failed or running in browser mode:", err);
       });
 
-    const handleStateUpdate = (state: InitialState) => {
-      if (state) {
-        setIsHost(state.isHost);
-        if (state.myPeer) setMyPeer({ ...state.myPeer, isHost: state.isHost });
-        if (state.serverAddr) setServerAddr(state.serverAddr);
-        if (state.peers) setPeers(state.peers);
-      }
-    };
-
-    EventsOn('initial-state-updated', handleStateUpdate);
+    EventsOn('initial-state-updated', applyInitialState);
 
     // Register Wails Real-Time Event Listeners
     EventsOn('peers-updated', (updatedPeers: Peer[]) => {
@@ -505,12 +509,29 @@ export function App() {
     }
   };
 
+  const handleRescanNetwork = async () => {
+    try {
+      const state = await RescanNetwork();
+      applyInitialState(state);
+    } catch (err) {
+      console.error("Failed to rescan LAN:", err);
+    }
+  };
+
+  const handleConnectToHost = async (hostAddr: string) => {
+    const state = await ConnectToHost(hostAddr);
+    applyInitialState(state);
+  };
+
   return (
     <div className="w-screen h-screen flex bg-slate-950 text-slate-100 overflow-hidden font-sans">
       {/* Sidebar */}
       <Sidebar
         myPeer={myPeer}
         isHost={isHost}
+        isConnected={isConnected}
+        isDiscovering={isDiscovering}
+        connectionError={connectionError}
         serverAddr={serverAddr}
         peers={peers}
         selectedTargetId={selectedTargetHostname || selectedTargetId}
@@ -518,6 +539,8 @@ export function App() {
         lastMessages={lastMessages}
         onSelectTarget={handleSelectTarget}
         onSendPing={handleSendPing}
+        onRescan={handleRescanNetwork}
+        onOpenConnectModal={() => setIsConnectModalOpen(true)}
       />
 
       {/* Main Chat Area */}
@@ -548,6 +571,15 @@ export function App() {
           onDismiss={() => setActivePingToast(null)}
         />
       )}
+
+      {/* Manual Host Connection Modal */}
+      <ConnectHostModal
+        visible={isConnectModalOpen}
+        defaultHost={isHost ? '' : serverAddr}
+        onClose={() => setIsConnectModalOpen(false)}
+        onConnect={handleConnectToHost}
+        onRescan={handleRescanNetwork}
+      />
     </div>
   );
 }

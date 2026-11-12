@@ -126,6 +126,9 @@ export namespace main {
 	export class InitialState {
 	    myPeer: network.Peer;
 	    isHost: boolean;
+	    isConnected: boolean;
+	    isDiscovering: boolean;
+	    connectionError: string;
 	    serverAddr: string;
 	    peers: CombinedPeer[];
 	
@@ -137,6 +140,9 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.myPeer = this.convertValues(source["myPeer"], network.Peer);
 	        this.isHost = source["isHost"];
+	        this.isConnected = source["isConnected"];
+	        this.isDiscovering = source["isDiscovering"];
+	        this.connectionError = source["connectionError"];
 	        this.serverAddr = source["serverAddr"];
 	        this.peers = this.convertValues(source["peers"], CombinedPeer);
 	    }
