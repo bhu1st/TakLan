@@ -14,12 +14,15 @@ A modern, cross-platform messaging and file sharing ecosystem built with **Go**,
 
 ## Architecture Overview
 
-- **Auto-Server Election & UDP Discovery**:
-  - The first node launched on a LAN binds TCP port `25252` and becomes the **Host Server**, broadcasting heartbeats over UDP port `25253`.
-  - Subsequent desktop and mobile instances auto-discover the host via UDP and connect as **Peer Clients**.
-- **Real-Time P2P Chat & File Streaming**:
-  - Supports General broadcast channel and 1-on-1 private messaging.
-  - Efficient chunked binary file transfer streams directly between devices.
+- **Auto-Server Election & Hybrid LAN Discovery**:
+  - The first desktop node launched on a LAN binds TCP/WebSocket port `25252` and becomes the **Host Server**, serving `/discover` probes and broadcasting heartbeats over UDP port `25253` on the primary physical LAN interface.
+  - Subsequent desktop clients auto-discover the host using **known-peer priority probing**, **UDP port `25253` beacons**, and an **outbound TCP `/24` subnet scan fallback** on port `25252` (so standard non-admin Windows users connect even when inbound UDP is blocked by Windows Firewall), alongside manual **Join Host IP** and **Rescan LAN** controls.
+  - Mobile clients auto-discover the host by scanning the local `/24` subnet over WebSocket (`ws://<ip>:25252/ws`) or via manual host IP entry.
+- **Auto-Reconnect & Lonely-Host Resolution**:
+  - Desktop and mobile clients automatically reconnect if disconnected, and an isolated desktop host with no other connected peers automatically switches to an active LAN host when discovered.
+- **Real-Time P2P Chat, Persistence & File Streaming**:
+  - Supports General broadcast channel, 1-on-1 private messaging with replies, and local SQLite history (with automatic `%AppData%\taklan` fallback on desktop when running from a read-only directory).
+  - Efficient chunked file transfer streams directly between desktop and mobile devices.
 - **Multiline Text & Monospace ASCII Art**:
   - Preserves exact spaces, line breaks, and monospace character alignment for ASCII art and code snippets.
 - **Audio Chime & Buzz Alerts**:
